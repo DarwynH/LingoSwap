@@ -1,0 +1,8 @@
+{
+  "name": "LingoSwap - Language Exchange",
+  "description": "A WhatsApp-inspired language exchange platform where you can chat and have real-time voice calls with AI language partners to practice your target languages.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
