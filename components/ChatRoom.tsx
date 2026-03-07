@@ -9,7 +9,7 @@ interface ChatRoomProps {
   user: UserProfile;
   session: ChatSession;
   onBack: () => void;
-  onCall: () => void;
+  onCall: (callId: string) => void; // UPDATED: Now expects a callId
 }
 
 const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) => {
@@ -50,6 +50,32 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
 
     return () => unsubscribe();
   }, [session.id]);
+
+  // NEW: Handle Call Initiation
+  const handleInitiateCall = async () => {
+    if (!partnerStatus?.isOnline) {
+      alert(`${session.partner.name} is currently offline and cannot receive calls.`);
+      return;
+    }
+
+    try {
+      // Create the call document in Firestore to trigger the partner's listener
+      const callDocRef = await addDoc(collection(db, "calls"), {
+        callerId: user.id,
+        receiverId: session.partner.id,
+        callerName: user.name,
+        callerAvatar: user.avatar,
+        status: 'ringing',
+        createdAt: Date.now()
+      });
+
+      // Pass the new call ID up to App.tsx to switch views to CallRoom
+      onCall(callDocRef.id);
+    } catch (error) {
+      console.error("Error initiating call:", error);
+      alert("Failed to start call. Please try again.");
+    }
+  };
 
   const handleDeleteMessage = async (messageId: string) => {
     await deleteDoc(doc(db, "chats", session.id, "messages", messageId));
@@ -93,7 +119,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
         partnerAvatar: session.partner.avatar
       };
 
-      // ✅ Move all updates inside Promise.all so they happen together
       await Promise.all([
         setDoc(userConvRef, conversationData, { merge: true }),
         setDoc(partnerConvRef, {
@@ -107,7 +132,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
           senderId: user.id,
           timestamp: Date.now()
         }),
-        // This ensures the ChatsList.tsx sees the latest message on the user object
         updateDoc(doc(db, "users", user.id), {
           lastMessage: messageText,
           lastMessageAt: Date.now()
@@ -147,7 +171,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
           </p>
         </div>
 
-        <button onClick={onCall} className="p-2 hover:bg-black/10 rounded-full transition-colors">
+        {/* UPDATED: Changed onClick to handleInitiateCall */}
+        <button onClick={handleInitiateCall} className="p-2 hover:bg-black/10 rounded-full transition-colors">
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
             <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
           </svg>

@@ -1,7 +1,7 @@
-import { db } from './firebase';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import React, { useState, useEffect } from 'react';
-import { UserProfile, Language, ChatSession } from './types';
+import { db, auth } from './firebase';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
+import React, { useState, useEffect, useRef } from 'react';
+import { UserProfile, Language, ChatSession, CallData } from './types';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import FindPartners from './components/FindPartners';
@@ -10,22 +10,47 @@ import ChatRoom from './components/ChatRoom';
 import CallRoom from './components/CallRoom';
 import ProfileSetup from './components/ProfileSetup';
 import Sidebar, { TabType } from './components/Sidebar';
-import { auth } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { signOut } from 'firebase/auth';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-
+import { onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [view, setView] = useState<'auth' | 'setup' | 'main' | 'chat' | 'call'>('auth');
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
-
   const [selectedPartner, setSelectedPartner] = useState<UserProfile | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  
+  const ringtoneRef = useRef<HTMLAudioElement | null>(null);
+
+  // Track incoming calls and the active call document
+  const [incomingCall, setIncomingCall] = useState<CallData | null>(null);
+  const [activeCallId, setActiveCallId] = useState<string | null>(null);
+
+  // NEW: Play ringtone when receiving a call
+  useEffect(() => {
+    if (incomingCall && view !== 'call') {
+      if (!ringtoneRef.current) {
+        ringtoneRef.current = new Audio('/ringtone.mp3');
+        ringtoneRef.current.loop = true;
+      }
+      ringtoneRef.current.play().catch(e => console.warn("Audio autoplay blocked:", e));
+    } else {
+      if (ringtoneRef.current) {
+        ringtoneRef.current.pause();
+        ringtoneRef.current.currentTime = 0;
+      }
+    }
+
+    return () => {
+      if (ringtoneRef.current) {
+        ringtoneRef.current.pause();
+      }
+    };
+  }, [incomingCall, view]);
 
   useEffect(() => {
+    let callUnsub: () => void;
+
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         const userRef = doc(db, "users", firebaseUser.uid);
@@ -35,12 +60,29 @@ const App: React.FC = () => {
           await updateDoc(userRef, { isOnline: true });
           setUser(userDoc.data() as UserProfile);
           setView('main');
+
+          // Listen for incoming calls
+          const callsQuery = query(
+            collection(db, "calls"),
+            where("receiverId", "==", firebaseUser.uid),
+            where("status", "==", "ringing")
+          );
+
+          callUnsub = onSnapshot(callsQuery, (snapshot) => {
+            if (!snapshot.empty) {
+              const callDoc = snapshot.docs[0];
+              setIncomingCall({ id: callDoc.id, ...callDoc.data() } as CallData);
+            } else {
+              setIncomingCall(null);
+            }
+          });
         } else {
           setView('setup');
         }
       } else {
         setUser(null);
         setView('auth');
+        if (callUnsub) callUnsub();
       }
     });
 
@@ -62,78 +104,52 @@ const App: React.FC = () => {
 
     return () => {
       unsubscribe();
+      if (callUnsub) callUnsub();
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener('beforeunload', handleUnload);
     };
   }, []);
 
   const handleProfileSave = async (updatedProfile: UserProfile) => {
-    if (!auth.currentUser) {
-      console.error("No user logged in");
-      return;
-    }
-
+    if (!auth.currentUser) return;
     try {
       const userRef = doc(db, "users", auth.currentUser.uid);
-      // This sends everything to Firestore
       await setDoc(userRef, updatedProfile, { merge: true });
-
       setUser(updatedProfile);
-      setActiveTab('partners'); // Optional: move them to the partners list
+      setActiveTab('partners');
       setView('main');
     } catch (error) {
       console.error("Firestore Save Error:", error);
-      alert("Save failed! Check console.");
     }
   };
 
   const handleStartChat = (partner: UserProfile, chatId: string) => {
-    // 1. Create the session object
-    const session: ChatSession = {
-      id: chatId,
-      partner,
-      messages: []
-    };
-
-    // 2. Set the state so the ChatRoom has data to render
+    const session: ChatSession = { id: chatId, partner, messages: [] };
     setActiveSession(session);
     setSelectedPartner(partner);
     setActiveChatId(chatId);
-
-    // 3. Switch the view
     setView('chat');
   };
 
-  const handleStartCall = (partner: UserProfile) => {
-    setActiveSession({
-      id: `call_${partner.id}`,
-      partner,
-      messages: []
-    });
+  const handleStartCall = (partner: UserProfile, callId?: string) => {
+    setActiveSession({ id: `call_${partner.id}`, partner, messages: [] });
+    setActiveCallId(callId || null);
     setView('call');
   };
 
   const handleLogin = async (email: string, password: string): Promise<void> => {
-    try {
-      const res = await signInWithEmailAndPassword(auth, email, password);
-      const userDoc = await getDoc(doc(db, "users", res.user.uid));
-
-      if (userDoc.exists()) {
-        // Important: Set online status on login
-        await updateDoc(doc(db, "users", res.user.uid), { isOnline: true });
-        setUser(userDoc.data() as UserProfile);
-        setView('main');
-      }
-    } catch (error) {
-      console.error("Login failed:", error);
-      throw error; // Re-throw so Auth.tsx can catch it
+    const res = await signInWithEmailAndPassword(auth, email, password);
+    const userDoc = await getDoc(doc(db, "users", res.user.uid));
+    if (userDoc.exists()) {
+      await updateDoc(doc(db, "users", res.user.uid), { isOnline: true });
+      setUser(userDoc.data() as UserProfile);
+      setView('main');
     }
   };
   
   const handleLogout = async () => {
     if (user) {
-      const userRef = doc(db, "users", user.id);
-      await updateDoc(userRef, { isOnline: false });
+      await updateDoc(doc(db, "users", user.id), { isOnline: false });
     }
     await signOut(auth);
     sessionStorage.removeItem('lingoswap_user');
@@ -141,44 +157,73 @@ const App: React.FC = () => {
     setView('auth');
   };
 
+  // Accept or Reject call handlers
+  const handleAcceptCall = async () => {
+    if (!incomingCall) return;
+    try {
+      await updateDoc(doc(db, "calls", incomingCall.id), { status: 'connecting' });
+      // Create a dummy partner profile for the CallRoom based on call data
+      const partner: UserProfile = {
+        id: incomingCall.callerId,
+        name: incomingCall.callerName,
+        avatar: incomingCall.callerAvatar,
+        email: '',
+        bio: '',
+        nativeLanguage: Language.ENGLISH, // Will be overridden by actual data later
+        targetLanguage: Language.SPANISH
+      };
+      setIncomingCall(null);
+      handleStartCall(partner, incomingCall.id);
+    } catch (error) {
+      console.error("Error accepting call:", error);
+    }
+  };
+
+  const handleRejectCall = async () => {
+    if (!incomingCall) return;
+    try {
+      await updateDoc(doc(db, "calls", incomingCall.id), { status: 'rejected' });
+      setIncomingCall(null);
+    } catch (error) {
+      console.error("Error rejecting call:", error);
+    }
+  };
+
   const renderMainContent = () => {
     if (!user) return null;
     switch (activeTab) {
-      case 'dashboard':
-        return (
-          <Dashboard 
-            user={user} 
-            onLogout={handleLogout}
-            onEditProfile={() => setView('setup')}
-          />
-        );
-      case 'partners':
-        return (
-          <FindPartners 
-            user={user} 
-            onStartChat={handleStartChat} 
-          />
-        );
-      case 'chats':
-        return (
-          <ChatsList
-            user={user} // ADD THIS LINE
-            onSelectChat={handleStartChat}
-          />
-        );
-      default:
-        return null;
+      case 'dashboard': return <Dashboard user={user} onLogout={handleLogout} onEditProfile={() => setView('setup')} />;
+      case 'partners': return <FindPartners user={user} onStartChat={handleStartChat} />;
+      case 'chats': return <ChatsList user={user} onSelectChat={handleStartChat} />;
+      default: return null;
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col max-w-6xl mx-auto bg-white shadow-xl relative overflow-hidden">
-      {view === 'auth' && <Auth onLogin={handleLogin} />}
-      
-      {view === 'setup' && user && (
-        <ProfileSetup profile={user} onSave={handleProfileSave} />
+      {/* Incoming Call Overlay */}
+      {incomingCall && view !== 'call' && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-[#1a1a1a] text-white p-4 rounded-2xl shadow-2xl flex items-center space-x-4 border border-[#25d366]/30 animate-bounce">
+          <img src={incomingCall.callerAvatar} alt="caller" className="w-12 h-12 rounded-full border-2 border-[#25d366]" />
+          <div>
+            <h4 className="font-bold">{incomingCall.callerName}</h4>
+            {/* FIXED TEXT HERE: Voice call instead of video */}
+            <p className="text-sm text-[#25d366]">Incoming voice call...</p>
+          </div>
+          <div className="flex space-x-2 ml-4">
+            <button onClick={handleRejectCall} className="p-3 bg-red-500 rounded-full hover:bg-red-600">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.994.994 0 01-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" /></svg>
+            </button>
+            <button onClick={handleAcceptCall} className="p-3 bg-[#25d366] rounded-full hover:bg-green-500">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" /></svg>
+            </button>
+          </div>
+        </div>
       )}
 
+      {view === 'auth' && <Auth onLogin={handleLogin} />}
+      {view === 'setup' && user && <ProfileSetup profile={user} onSave={handleProfileSave} />}
+      
       {view === 'main' && user && (
         <div className="flex flex-1 overflow-hidden h-full">
           <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
@@ -193,12 +238,14 @@ const App: React.FC = () => {
           user={user} 
           session={activeSession} 
           onBack={() => setView('main')} 
-          onCall={() => setView('call')}
+          onCall={(callId) => handleStartCall(activeSession.partner, callId)}
         />
       )}
 
-      {view === 'call' && activeSession && (
+      {view === 'call' && activeSession && user && (
         <CallRoom 
+          currentUser={user}        
+          callId={activeCallId}     
           partner={activeSession.partner} 
           onClose={() => setView('chat')} 
         />
