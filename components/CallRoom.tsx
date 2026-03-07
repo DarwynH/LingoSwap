@@ -7,6 +7,7 @@ interface CallRoomProps {
   currentUser: UserProfile;
   partner: UserProfile;
   callId: string | null;
+  callType: 'voice' | 'video'; // NEW: Accept the call type
   onClose: () => void;
 }
 
@@ -16,17 +17,21 @@ const servers = {
   ],
 };
 
-const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, onClose }) => {
+const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callType, onClose }) => {
   const [status, setStatus] = useState<'connecting' | 'active' | 'ended'>('connecting');
   const [callTime, setCallTime] = useState(0);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null); // NEW: To show exact errors
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const timerRef = useRef<number | null>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const hasSetupStarted = useRef(false); // NEW: Prevents React StrictMode double-execution
+  
+  // NEW: Refs for the video elements
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  
+  const hasSetupStarted = useRef(false);
   const ringbackRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -39,11 +44,19 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, onClo
 
     const setupWebRTC = async () => {
       try {
-        // 1. Get Local Microphone Audio FIRST (Most common point of failure)
+        // 1. Get Local Media (Microphone AND optionally Camera)
         try {
-          localStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          localStreamRef.current = await navigator.mediaDevices.getUserMedia({ 
+            audio: true, 
+            video: callType === 'video' // True if video call, false if voice
+          });
         } catch (micError) {
-          throw new Error("Microphone access denied. Please allow microphone permissions in your browser.");
+          throw new Error(`Microphone ${callType === 'video' ? 'and Camera' : ''} access denied. Please allow permissions.`);
+        }
+
+        // Attach local stream to the picture-in-picture video element
+        if (callType === 'video' && localVideoRef.current) {
+          localVideoRef.current.srcObject = localStreamRef.current;
         }
 
         // 2. Initialize Peer Connection & Streams
@@ -51,8 +64,9 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, onClo
         pcRef.current = pc;
         remoteStreamRef.current = new MediaStream();
 
-        if (audioRef.current) {
-          audioRef.current.srcObject = remoteStreamRef.current;
+        // Attach remote stream to the main video element
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = remoteStreamRef.current;
         }
 
         localStreamRef.current.getTracks().forEach((track) => {
@@ -66,16 +80,14 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, onClo
         };
 
         pc.onconnectionstatechange = () => {
-  if (pc.connectionState === 'connected') {
-    // NEW: Stop the dial tone because they picked up!
-    if (ringbackRef.current) ringbackRef.current.pause(); 
-    
-    setStatus('active');
-    timerRef.current = window.setInterval(() => setCallTime((t) => t + 1), 1000);
-  } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-    handleHangup(false);
-  }
-};
+          if (pc.connectionState === 'connected') {
+            if (ringbackRef.current) ringbackRef.current.pause(); 
+            setStatus('active');
+            timerRef.current = window.setInterval(() => setCallTime((t) => t + 1), 1000);
+          } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+            handleHangup(false);
+          }
+        };
 
         // 3. Signaling Logic via Firestore
         const callDocRef = doc(db, 'calls', callId);
@@ -86,16 +98,14 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, onClo
         const callData = callDocSnap.data();
 
         if (callData?.callerId === currentUser.id) {
-  // --- WE ARE THE CALLER ---
-  
-  // NEW: Start playing the dial tone while we wait
-  ringbackRef.current = new Audio('/ringback.mp3');
-  ringbackRef.current.loop = true;
-  ringbackRef.current.play().catch(e => console.warn("Ringback autoplay blocked:", e));
+          // --- WE ARE THE CALLER ---
+          ringbackRef.current = new Audio('/ringback.mp3');
+          ringbackRef.current.loop = true;
+          ringbackRef.current.play().catch(e => console.warn("Ringback autoplay blocked:", e));
 
-  pc.onicecandidate = (event) => {
-    event.candidate && addDoc(callerCandidatesRef, event.candidate.toJSON());
-  };
+          pc.onicecandidate = (event) => {
+            event.candidate && addDoc(callerCandidatesRef, event.candidate.toJSON());
+          };
 
           const offerDescription = await pc.createOffer();
           await pc.setLocalDescription(offerDescription);
@@ -131,7 +141,6 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, onClo
 
           let offerDescription = callData?.offer;
           
-          // NEW: If caller is slow, wait for their offer to hit the database
           if (!offerDescription) {
             await new Promise<void>((resolve) => {
               const unsubWait = onSnapshot(callDocRef, (snap) => {
@@ -171,7 +180,6 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, onClo
         }
       } catch (error: any) {
         console.error("WebRTC Setup Error:", error);
-        // Display the error on screen instead of instantly ending the call!
         setErrorMsg(error.message || "An unknown WebRTC error occurred.");
       }
     };
@@ -184,21 +192,20 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, onClo
       if (unsubReceiverICE) unsubReceiverICE();
       cleanupMedia();
     };
-  }, [callId, currentUser.id]);
+  }, [callId, currentUser.id, callType]);
 
   const cleanupMedia = () => {
-  if (timerRef.current) clearInterval(timerRef.current);
-  if (localStreamRef.current) {
-    localStreamRef.current.getTracks().forEach((track) => track.stop());
-  }
-  if (pcRef.current) {
-    pcRef.current.close();
-  }
-  // NEW: Stop ringback sound when cleaning up
-  if (ringbackRef.current) {
-    ringbackRef.current.pause();
-  }
-};
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((track) => track.stop());
+    }
+    if (pcRef.current) {
+      pcRef.current.close();
+    }
+    if (ringbackRef.current) {
+      ringbackRef.current.pause();
+    }
+  };
 
   const handleHangup = async (updateFirebase = true) => {
     setStatus('ended');
@@ -224,40 +231,69 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, onClo
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-between bg-[#075e54] p-8 text-white relative">
-      <audio ref={audioRef} autoPlay playsInline className="hidden" />
+    <div className="flex-1 flex flex-col items-center justify-between bg-[#075e54] text-white relative h-full overflow-hidden">
+      
+      {/* Remote Video Element (Hidden if voice-only, full background if video) */}
+      <video 
+        ref={remoteVideoRef} 
+        autoPlay 
+        playsInline 
+        className={callType === 'video' ? "absolute inset-0 w-full h-full object-cover z-0" : "hidden"} 
+      />
 
-      <div className="text-center mt-12">
-        <img 
-          src={partner.avatar} 
-          className={`w-32 h-32 rounded-full border-4 border-[#25d366] mx-auto shadow-2xl ${status === 'connecting' && !errorMsg ? 'animate-pulse' : ''}`} 
-          alt="partner avatar"
+      {/* Local Video Element (Picture-in-Picture) */}
+      {callType === 'video' && (
+        <video 
+          ref={localVideoRef} 
+          autoPlay 
+          playsInline 
+          muted // CRITICAL: Mute local video so you don't hear your own echo!
+          className="absolute bottom-32 right-6 w-28 h-40 bg-[#1a1a1a] rounded-xl object-cover border-2 border-white/20 shadow-2xl z-10" 
         />
-        <h2 className="text-2xl font-bold mt-6">{partner.name}</h2>
+      )}
+
+      {/* Top Header / Avatar UI */}
+      <div className={`text-center z-10 w-full px-4 ${callType === 'voice' ? 'mt-12' : 'mt-8'}`}>
         
-        {/* NEW: Display errors clearly to the user */}
+        {/* Only show avatar for voice calls */}
+        {callType === 'voice' && (
+          <img 
+            src={partner.avatar} 
+            className={`w-32 h-32 rounded-full border-4 border-[#25d366] mx-auto shadow-2xl ${status === 'connecting' && !errorMsg ? 'animate-pulse' : ''}`} 
+            alt="partner avatar"
+          />
+        )}
+        
+        <h2 className={`font-bold ${callType === 'voice' ? 'text-2xl mt-6' : 'text-xl drop-shadow-md'}`}>
+          {partner.name}
+        </h2>
+        
         {errorMsg ? (
-          <div className="bg-red-500/20 text-red-100 p-4 rounded-xl mt-4 max-w-sm text-center border border-red-500/50">
+          <div className="bg-red-500/80 text-red-100 p-4 rounded-xl mt-4 max-w-sm mx-auto text-center border border-red-500/50 backdrop-blur-md">
             <p className="font-bold">Connection Failed</p>
             <p className="text-sm mt-1">{errorMsg}</p>
           </div>
         ) : (
-          <p className="text-[#25d366] font-medium mt-1">
-            {status === 'connecting' ? 'Connecting...' : status === 'active' ? formatTime(callTime) : 'Call Ended'}
-          </p>
+          <div className={`mt-2 ${callType === 'video' ? 'bg-black/40 inline-block px-4 py-1 rounded-full backdrop-blur-sm' : ''}`}>
+            <p className={`font-medium ${callType === 'voice' ? 'text-[#25d366]' : 'text-white'}`}>
+              {status === 'connecting' ? 'Connecting...' : status === 'active' ? formatTime(callTime) : 'Call Ended'}
+            </p>
+          </div>
         )}
       </div>
 
-      <div className="w-full max-w-xs space-y-4">
-        {status === 'active' && (
-           <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl text-center text-sm border border-white/20">
-             <p className="opacity-80">Practice your {partner.nativeLanguage} skills</p>
-             <p className="font-bold text-[#25d366] mt-1 italic">"Speak naturally!"</p>
-           </div>
-        )}
-      </div>
+      {/* Voice Practice Text Overlay (Only for voice calls) */}
+      {callType === 'voice' && status === 'active' && (
+        <div className="w-full max-w-xs space-y-4 z-10">
+          <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl text-center text-sm border border-white/20">
+            <p className="opacity-80">Practice your {partner.nativeLanguage} skills</p>
+            <p className="font-bold text-[#25d366] mt-1 italic">"Speak naturally!"</p>
+          </div>
+        </div>
+      )}
 
-      <div className="mb-12 flex space-x-8">
+      {/* Bottom Controls */}
+      <div className="mb-12 flex space-x-8 z-10">
         <button 
           onClick={() => handleHangup(true)}
           className="p-4 bg-red-500 hover:bg-red-600 rounded-full shadow-lg transform active:scale-90 transition-all"

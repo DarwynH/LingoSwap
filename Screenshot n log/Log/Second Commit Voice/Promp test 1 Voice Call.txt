@@ -1,0 +1,37 @@
+Role: You are an expert React, TypeScript, and WebRTC developer.
+
+Project: Lingoswap (A web application)
+Goal: Implement a 1-on-1 Voice Call function inside the existing chat section.
+
+Tech Stack Context:
+
+Frontend: React (Vite), TypeScript.
+
+Backend/Database: Firebase, Firestore.
+
+Voice Tech: WebRTC.
+
+State Management: React Context.
+
+Core Features & Logic:
+
+Call Initiation: User A clicks a "Call" button in the ChatRoom.tsx to call User B.
+
+Presence Check: The system checks if User B is online.
+
+If Offline: The call ends immediately, and User A sees a message/alert: "User is not online."
+
+If Online: User B receives a ringing notification/UI prompt stating: "[User A's Name] is calling..."
+
+Call Connection: If User B accepts, the audio stream connects using the CallRoom.tsx component.
+
+Gameplan / Workflow:
+We will do this step-by-step so we don't break the existing codebase.
+
+First, I will share my firebase.ts, types.ts, and App.tsx so you understand my current setup and presence system. You will give me the database rules/logic needed to track "Online/Offline" status and "Call Offers".
+
+Second, I will share ChatRoom.tsx. You will give me the code to add the Call button and handle the outgoing call logic.
+
+Third, I will share CallRoom.tsx (and any other files you request). You will write the audio streaming and connection logic.
+
+Project Directory Reference:

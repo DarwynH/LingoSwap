@@ -38,17 +38,18 @@ export interface ChatSession {
   lastMessage?: string;
 }
 
-//New line added Below Log  3/7 1:38 AM
+//New line added Below Log  3/7 3/8
 
-export type CallStatus = 'ringing' | 'connecting' | 'connected' | 'rejected' | 'ended';
+export type CallStatus = 'ringing' | 'connecting' | 'active' | 'rejected' | 'ended';
 
 export interface CallData {
-  id: string; // The Firestore document ID
+  id: string; 
   callerId: string;
   receiverId: string;
   callerName: string;
   callerAvatar: string;
   status: CallStatus;
+  type: 'voice' | 'video'; // NEW: Track the type of call
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
   createdAt: number;

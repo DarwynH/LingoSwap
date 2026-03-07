@@ -9,7 +9,8 @@ interface ChatRoomProps {
   user: UserProfile;
   session: ChatSession;
   onBack: () => void;
-  onCall: (callId: string) => void; // UPDATED: Now expects a callId
+  // UPDATED: Now expects both a callId and a type
+  onCall: (callId: string, type: 'voice' | 'video') => void; 
 }
 
 const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) => {
@@ -22,7 +23,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // 1. Real-time listener for the partner's online status
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "users", session.partner.id), (docSnap) => {
       if (docSnap.exists()) {
@@ -32,7 +32,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     return () => unsub();
   }, [session.partner.id]);
 
-  // 2. Real-time listener for messages
   useEffect(() => {
     const q = query(
       collection(db, "chats", session.id, "messages"),
@@ -51,26 +50,26 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     return () => unsubscribe();
   }, [session.id]);
 
-  // NEW: Handle Call Initiation
-  const handleInitiateCall = async () => {
+  // UPDATED: Now accepts callType
+  const handleInitiateCall = async (callType: 'voice' | 'video') => {
     if (!partnerStatus?.isOnline) {
       alert(`${session.partner.name} is currently offline and cannot receive calls.`);
       return;
     }
 
     try {
-      // Create the call document in Firestore to trigger the partner's listener
       const callDocRef = await addDoc(collection(db, "calls"), {
         callerId: user.id,
         receiverId: session.partner.id,
         callerName: user.name,
         callerAvatar: user.avatar,
         status: 'ringing',
+        type: callType, // NEW: Save the call type to Firestore
         createdAt: Date.now()
       });
 
-      // Pass the new call ID up to App.tsx to switch views to CallRoom
-      onCall(callDocRef.id);
+      // Pass the new call ID and type up to App.tsx
+      onCall(callDocRef.id, callType);
     } catch (error) {
       console.error("Error initiating call:", error);
       alert("Failed to start call. Please try again.");
@@ -83,15 +82,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     const q = query(
       collection(db, "chats", session.id, "messages"),
       orderBy("timestamp", "desc"),
-      limit(1) // Just get the new latest message
+      limit(1)
     );
     const snapshot = await getDocs(q);
 
     if (snapshot.empty) {
-      // No messages left? Remove from sidebar
       await deleteDoc(doc(db, "users", user.id, "conversations", session.partner.id));
     } else {
-      // Messages left? Update the sidebar with the new latest one
       const newLastMsg = snapshot.docs[0].data();
       await updateDoc(doc(db, "users", user.id, "conversations", session.partner.id), {
         lastMessage: newLastMsg.text,
@@ -171,8 +168,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
           </p>
         </div>
 
-        {/* UPDATED: Changed onClick to handleInitiateCall */}
-        <button onClick={handleInitiateCall} className="p-2 hover:bg-black/10 rounded-full transition-colors">
+        {/* NEW: Video Call Button */}
+        <button onClick={() => handleInitiateCall('video')} className="p-2 hover:bg-black/10 rounded-full transition-colors">
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+          </svg>
+        </button>
+
+        {/* Existing Voice Call Button */}
+        <button onClick={() => handleInitiateCall('voice')} className="p-2 hover:bg-black/10 rounded-full transition-colors">
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
             <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" />
           </svg>

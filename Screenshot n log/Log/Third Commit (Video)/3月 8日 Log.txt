@@ -1,0 +1,9 @@
+Third Commit Video call
+Modiy App.tsx types.ts ChatRoom.tsx CallRoom.tsx vite.config.ts
+
+npm install --save-dev @vitejs/plugin-basic-ssl
+
+
+Test on 2 different device using local host (same network required)
+npm run dev 
+use the network URL to run on second device

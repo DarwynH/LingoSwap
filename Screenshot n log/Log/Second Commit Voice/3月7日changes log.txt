@@ -1,0 +1,8 @@
+3/7/26- 
+update on:
+1 Replacing app.tsx types.ts ChatRoom.tsx CallRoom.tsx for the voice call
+2 replacing firestore database rule
+3 adding public folder containing the ringtones
+
+to apply Changes on Real:
+app.tsx types.ts ChatRoom.tsx CallRoom.tsx public "folder"

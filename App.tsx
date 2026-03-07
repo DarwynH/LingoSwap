@@ -22,11 +22,12 @@ const App: React.FC = () => {
   
   const ringtoneRef = useRef<HTMLAudioElement | null>(null);
 
-  // Track incoming calls and the active call document
   const [incomingCall, setIncomingCall] = useState<CallData | null>(null);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
+  
+  // NEW: State to track if the current active call is voice or video
+  const [activeCallType, setActiveCallType] = useState<'voice' | 'video'>('voice');
 
-  // NEW: Play ringtone when receiving a call
   useEffect(() => {
     if (incomingCall && view !== 'call') {
       if (!ringtoneRef.current) {
@@ -61,7 +62,6 @@ const App: React.FC = () => {
           setUser(userDoc.data() as UserProfile);
           setView('main');
 
-          // Listen for incoming calls
           const callsQuery = query(
             collection(db, "calls"),
             where("receiverId", "==", firebaseUser.uid),
@@ -131,9 +131,11 @@ const App: React.FC = () => {
     setView('chat');
   };
 
-  const handleStartCall = (partner: UserProfile, callId?: string) => {
+  // UPDATED: Now accepts callType to set the state
+  const handleStartCall = (partner: UserProfile, callId?: string, type: 'voice' | 'video' = 'voice') => {
     setActiveSession({ id: `call_${partner.id}`, partner, messages: [] });
     setActiveCallId(callId || null);
+    setActiveCallType(type); // Save the type
     setView('call');
   };
 
@@ -157,23 +159,24 @@ const App: React.FC = () => {
     setView('auth');
   };
 
-  // Accept or Reject call handlers
   const handleAcceptCall = async () => {
     if (!incomingCall) return;
     try {
       await updateDoc(doc(db, "calls", incomingCall.id), { status: 'connecting' });
-      // Create a dummy partner profile for the CallRoom based on call data
       const partner: UserProfile = {
         id: incomingCall.callerId,
         name: incomingCall.callerName,
         avatar: incomingCall.callerAvatar,
         email: '',
         bio: '',
-        nativeLanguage: Language.ENGLISH, // Will be overridden by actual data later
+        nativeLanguage: Language.ENGLISH,
         targetLanguage: Language.SPANISH
       };
+      
+      // UPDATED: Pass the incoming call type so the receiver knows it's a video call
+      const type = incomingCall.type || 'voice'; 
       setIncomingCall(null);
-      handleStartCall(partner, incomingCall.id);
+      handleStartCall(partner, incomingCall.id, type);
     } catch (error) {
       console.error("Error accepting call:", error);
     }
@@ -207,8 +210,10 @@ const App: React.FC = () => {
           <img src={incomingCall.callerAvatar} alt="caller" className="w-12 h-12 rounded-full border-2 border-[#25d366]" />
           <div>
             <h4 className="font-bold">{incomingCall.callerName}</h4>
-            {/* FIXED TEXT HERE: Voice call instead of video */}
-            <p className="text-sm text-[#25d366]">Incoming voice call...</p>
+            {/* UPDATED: Dynamically show Voice or Video */}
+            <p className="text-sm text-[#25d366]">
+              Incoming {incomingCall.type === 'video' ? 'video' : 'voice'} call...
+            </p>
           </div>
           <div className="flex space-x-2 ml-4">
             <button onClick={handleRejectCall} className="p-3 bg-red-500 rounded-full hover:bg-red-600">
@@ -238,7 +243,8 @@ const App: React.FC = () => {
           user={user} 
           session={activeSession} 
           onBack={() => setView('main')} 
-          onCall={(callId) => handleStartCall(activeSession.partner, callId)}
+          // UPDATED: Receive both callId and type from ChatRoom
+          onCall={(callId, type) => handleStartCall(activeSession.partner, callId, type)}
         />
       )}
 
@@ -247,6 +253,7 @@ const App: React.FC = () => {
           currentUser={user}        
           callId={activeCallId}     
           partner={activeSession.partner} 
+          callType={activeCallType} // NEW: Pass the type down!
           onClose={() => setView('chat')} 
         />
       )}
