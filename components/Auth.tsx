@@ -27,25 +27,15 @@ const Auth: React.FC<AuthProps> = ({ onLogin }) => {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (isLogin) {
-        // 3. Use the prop here
         await onLogin(email, password);
       } else {
-        const res = await createUserWithEmailAndPassword(auth, email, password);
-        const initial = email.charAt(0).toUpperCase();
-        const defaultAvatar = `https://ui-avatars.com/api/?name=${initial}&background=random`;
-
-        await setDoc(doc(db, "users", res.user.uid), {
-          id: res.user.uid,
-          email: email,
-          name: email.split('@')[0],
-          avatar: defaultAvatar,
-          isOnline: true,
-          lastMessageAt: Date.now() // Use lastMessageAt to fix sort error
-        });
+        // Just create the user. App.tsx will detect the new user and route them to ProfileSetup.
+        await createUserWithEmailAndPassword(auth, email, password);
+   
       }
     } catch (error: any) {
       alert(error.message);

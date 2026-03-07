@@ -77,12 +77,20 @@ const App: React.FC = () => {
             }
           });
         } else {
+          // CORRECT PLACEMENT: The user is authenticated, but has no Firestore document yet.
+          setUser({
+            id: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            name: firebaseUser.email?.split('@')[0] || 'New User',
+            avatar: `https://ui-avatars.com/api/?name=${firebaseUser.email?.charAt(0).toUpperCase() || 'U'}&background=random`,
+          } as UserProfile);
+  
           setView('setup');
         }
       } else {
+        // CORRECT PLACEMENT: The user is entirely logged out.
         setUser(null);
         setView('auth');
-        if (callUnsub) callUnsub();
       }
     });
 
