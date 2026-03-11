@@ -1,0 +1,10 @@
+Precaution:
+-add .env  to the functions folder (ask)
+-changes to the node.js 20 engine (will be deprecated on Apr 30, 2026 and decommissioned on Oct 30, 2026.) because it keep not working for 24 and 22. !!
+
+Changes and modify:
+MessageBubble.tsx ChatRoom.tsx 
+
+added:
+translationService.ts 
+new folder : src\.env index.ts

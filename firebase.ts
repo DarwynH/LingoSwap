@@ -12,10 +12,12 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// 1. Initialize App first
-const app = initializeApp(firebaseConfig);
+// 1. Initialize and export App first
+export const app = initializeApp(firebaseConfig);
 
 // 2. Export services after app exists
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+// (Removed the duplicate 'export const app...' from down here)
