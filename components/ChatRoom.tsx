@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, deleteDoc, doc, updateDoc, setDoc, getDocs, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, deleteDoc, doc, updateDoc, setDoc, getDocs, limit, writeBatch, increment } from 'firebase/firestore';
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile, ChatMessage, ChatSession } from '../types';
 import MessageBubble from './Chat/MessageBubble';
@@ -9,7 +9,6 @@ interface ChatRoomProps {
   user: UserProfile;
   session: ChatSession;
   onBack: () => void;
-  // UPDATED: Now expects both a callId and a type
   onCall: (callId: string, type: 'voice' | 'video') => void; 
 }
 
@@ -23,6 +22,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // 1. Listen to partner's online status
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "users", session.partner.id), (docSnap) => {
       if (docSnap.exists()) {
@@ -32,25 +32,49 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     return () => unsub();
   }, [session.partner.id]);
 
+  // 2. Listen to messages and handle Read Receipts
   useEffect(() => {
     const q = query(
       collection(db, "chats", session.id, "messages"),
       orderBy("timestamp", "asc")
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const liveMessages = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as ChatMessage[];
+      
       setMessages(liveMessages);
       setTimeout(scrollToBottom, 100);
+
+      // --- READ RECEIPT LOGIC ---
+      // Find messages sent to us that are not read yet
+      const unreadReceivedMessages = snapshot.docs.filter(docSnap => {
+        const data = docSnap.data() as ChatMessage;
+        return data.senderId !== user.id && !data.read;
+      });
+
+      if (unreadReceivedMessages.length > 0) {
+        const batch = writeBatch(db);
+        
+        // Mark these specific messages as read
+        unreadReceivedMessages.forEach(docSnap => {
+          batch.update(docSnap.ref, { read: true, readAt: Date.now() });
+        });
+
+        // Reset our own unread count for this conversation back to 0
+        const userConvRef = doc(db, "users", user.id, "conversations", session.partner.id);
+        batch.set(userConvRef, { unreadCount: 0 }, { merge: true });
+
+        await batch.commit().catch(err => console.error("Error marking messages as read:", err));
+      }
     });
 
     return () => unsubscribe();
-  }, [session.id]);
+  }, [session.id, user.id, session.partner.id]);
 
-  // UPDATED: Now accepts callType
+  // Handle Calls (Preserved)
   const handleInitiateCall = async (callType: 'voice' | 'video') => {
     if (!partnerStatus?.isOnline) {
       alert(`${session.partner.name} is currently offline and cannot receive calls.`);
@@ -64,11 +88,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
         callerName: user.name,
         callerAvatar: user.avatar,
         status: 'ringing',
-        type: callType, // NEW: Save the call type to Firestore
+        type: callType,
         createdAt: Date.now()
       });
 
-      // Pass the new call ID and type up to App.tsx
       onCall(callDocRef.id, callType);
     } catch (error) {
       console.error("Error initiating call:", error);
@@ -76,6 +99,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     }
   };
 
+  // Handle Message Deletion (Preserved)
   const handleDeleteMessage = async (messageId: string) => {
     await deleteDoc(doc(db, "chats", session.id, "messages", messageId));
 
@@ -97,47 +121,57 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     }
   };
 
+  // --- UPDATED SEND LOGIC ---
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
 
     const messageText = inputText;
     setInputText('');
+    const now = Date.now();
 
     try {
       const userConvRef = doc(db, "users", user.id, "conversations", session.partner.id);
       const partnerConvRef = doc(db, "users", session.partner.id, "conversations", user.id);
+      const newMessageRef = doc(collection(db, "chats", session.id, "messages"));
 
-      const conversationData = {
+      const batch = writeBatch(db);
+
+      // 1. Update our conversation preview (do not alter unreadCount, or set to 0 if new)
+      batch.set(userConvRef, {
         lastMessage: messageText,
-        timestamp: Date.now(),
+        timestamp: now,
         partnerId: session.partner.id,
         partnerName: session.partner.name,
         partnerAvatar: session.partner.avatar
-      };
+      }, { merge: true });
 
-      await Promise.all([
-        setDoc(userConvRef, conversationData, { merge: true }),
-        setDoc(partnerConvRef, {
-          ...conversationData,
-          partnerId: user.id,
-          partnerName: user.name,
-          partnerAvatar: user.avatar
-        }, { merge: true }),
-        addDoc(collection(db, "chats", session.id, "messages"), {
-          text: messageText,
-          senderId: user.id,
-          timestamp: Date.now()
-        }),
-        updateDoc(doc(db, "users", user.id), {
-          lastMessage: messageText,
-          lastMessageAt: Date.now()
-        }),
-        updateDoc(doc(db, "users", session.partner.id), {
-          lastMessage: messageText,
-          lastMessageAt: Date.now()
-        })
-      ]);
+      // 2. Update partner's conversation preview and increment unread
+      batch.set(partnerConvRef, {
+        lastMessage: messageText,
+        timestamp: now,
+        partnerId: user.id,
+        partnerName: user.name,
+        partnerAvatar: user.avatar,
+        unreadCount: increment(1) // Increment the partner's badge by 1
+      }, { merge: true });
+
+      // 3. Update global user records (preserved from your original code)
+      batch.update(doc(db, "users", user.id), { lastMessage: messageText, lastMessageAt: now });
+      batch.update(doc(db, "users", session.partner.id), { lastMessage: messageText, lastMessageAt: now });
+
+      // 4. Add the actual message with new read receipt fields
+      batch.set(newMessageRef, {
+        text: messageText,
+        senderId: user.id,
+        receiverId: session.partner.id,
+        timestamp: now,
+        read: false, // Default to false when sending
+        readAt: null
+      });
+
+      // Commit everything atomically
+      await batch.commit();
 
     } catch (error) {
       console.error("Chat error:", error);

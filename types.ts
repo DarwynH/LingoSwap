@@ -1,4 +1,3 @@
-
 export enum Language {
   ENGLISH = 'English',
   SPANISH = 'Spanish',
@@ -27,8 +26,11 @@ export interface UserProfile {
 export interface ChatMessage {
   id: string;
   senderId: string;
+  receiverId: string; // NEW: Added for read receipts
   text: string;
   timestamp: number;
+  read: boolean; // NEW: Added for read receipts
+  readAt?: number | null; // NEW: Added for read receipts
 }
 
 export interface ChatSession {
@@ -53,4 +55,14 @@ export interface CallData {
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
   createdAt: number;
+}
+
+// NEW: Added for chat list metadata and unread indicators
+export interface ConversationPreview {
+  partnerId: string;
+  partnerName: string;
+  partnerAvatar: string;
+  lastMessage: string;
+  timestamp: number;
+  unreadCount: number; 
 }

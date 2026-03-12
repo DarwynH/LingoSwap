@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChatMessage } from '../../types';
-import { translateTextToEnglish } from '../../services/translationService';
+import { translateTextToEnglish } from '../../services/translationService'; // Ensure this matches your path
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -78,9 +78,16 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isMe }) => {
             <span className="text-[9px] text-gray-400">
               {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
+            
+            {/* NEW: Updated Read Receipt UI */}
             {isMe && (
-              <svg className="w-3 h-3 text-[#34b7f1]" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M22 6L9 19l-5-5 1.41-1.41L9 16.17l11.59-11.59L22 6z" />
+              <svg 
+                className={`w-4 h-4 ${message.read ? 'text-[#34b7f1]' : 'text-gray-400'}`} 
+                fill="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                {/* Double checkmark path */}
+                <path d="M18 7l-1.41-1.41-6.34 6.34 1.41 1.41L18 7zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41L11.66 19l12-12-1.42-1.41zM.41 13.41L6 19l1.41-1.41L1.83 12 .41 13.41z" />
               </svg>
             )}
           </div>
