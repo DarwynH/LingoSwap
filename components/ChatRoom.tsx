@@ -100,24 +100,46 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
   };
 
   // Handle Message Deletion (Preserved)
-  const handleDeleteMessage = async (messageId: string) => {
-    await deleteDoc(doc(db, "chats", session.id, "messages", messageId));
+ const handleDeleteMessage = async (messageId: string) => {
+    try {
+      // 1. Delete the actual message
+      await deleteDoc(doc(db, "chats", session.id, "messages", messageId));
 
-    const q = query(
-      collection(db, "chats", session.id, "messages"),
-      orderBy("timestamp", "desc"),
-      limit(1)
-    );
-    const snapshot = await getDocs(q);
+      // 2. Get the new most recent message in the chat
+      const q = query(
+        collection(db, "chats", session.id, "messages"),
+        orderBy("timestamp", "desc"),
+        limit(1)
+      );
+      const snapshot = await getDocs(q);
 
-    if (snapshot.empty) {
-      await deleteDoc(doc(db, "users", user.id, "conversations", session.partner.id));
-    } else {
-      const newLastMsg = snapshot.docs[0].data();
-      await updateDoc(doc(db, "users", user.id, "conversations", session.partner.id), {
-        lastMessage: newLastMsg.text,
-        timestamp: newLastMsg.timestamp
-      });
+      // 3. Prepare to update both sidebars
+      const batch = writeBatch(db);
+      const userConvRef = doc(db, "users", user.id, "conversations", session.partner.id);
+      const partnerConvRef = doc(db, "users", session.partner.id, "conversations", user.id);
+
+      if (snapshot.empty) {
+        // If that was the last message, delete the conversation previews entirely
+        batch.delete(userConvRef);
+        batch.delete(partnerConvRef);
+      } else {
+        // Otherwise, update both sidebars to show the new last message
+        const newLastMsg = snapshot.docs[0].data();
+        
+        batch.set(userConvRef, {
+          lastMessage: newLastMsg.text,
+          timestamp: newLastMsg.timestamp
+        }, { merge: true });
+
+        batch.set(partnerConvRef, {
+          lastMessage: newLastMsg.text,
+          timestamp: newLastMsg.timestamp
+        }, { merge: true });
+      }
+
+      await batch.commit();
+    } catch (error) {
+      console.error("Error deleting message:", error);
     }
   };
 
