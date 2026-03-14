@@ -79,6 +79,18 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isMe }) => {
           </a>
         )}
 
+        {/* Voice Rendering */}
+        {message.type === 'voice' && message.fileURL && (
+          <div className="flex items-center space-x-2 py-1 min-w-[200px]">
+            <audio 
+              controls 
+              src={message.fileURL} 
+              className="h-10 w-full" 
+              controlsList="nodownload"
+            />
+          </div>
+        )}
+
         {/* Text Rendering */}
         {message.text && (
           <p className="text-sm text-gray-800 break-words leading-relaxed">

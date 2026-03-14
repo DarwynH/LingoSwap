@@ -1,24 +1,24 @@
 // components/ChatRoom.tsx
 import { db, storage } from '../firebase'; 
-import { collection, query, orderBy, onSnapshot, doc, deleteDoc, writeBatch, increment, getDocs, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, deleteDoc, writeBatch, increment, getDocs, limit, setDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile, ChatMessage, ChatSession, MessageType } from '../types';
 import MessageBubble from './Chat/MessageBubble';
 import Avatar from './ui/Avatar';
+import ChatInput from './Chat/ChatInput';
 
 interface ChatRoomProps {
   user: UserProfile;
   session: ChatSession;
   onBack: () => void;
-  onCall: (callId: string, type: 'voice' | 'video') => void; 
+  onCall: (partnerId: string, type: 'voice' | 'video') => void; 
 }
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB limit
 
 const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputText, setInputText] = useState('');
   const [partnerStatus, setPartnerStatus] = useState<UserProfile | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -46,6 +46,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
       setMessages(liveMessages);
       setTimeout(scrollToBottom, 100);
 
+      // FIX 1: Auto-Clear stuck text if the chat room is completely empty
+      if (snapshot.empty) {
+        const userConvRef = doc(db, "users", user.id, "conversations", session.partner.id);
+        try {
+          await setDoc(userConvRef, { lastMessage: "", unreadCount: 0 }, { merge: true });
+        } catch (error) {
+          console.warn("Could not sync empty state", error);
+        }
+      }
+
       const unreadReceivedMessages = snapshot.docs.filter(docSnap => {
         const data = docSnap.data() as ChatMessage;
         return data.senderId !== user.id && !data.read;
@@ -62,20 +72,22 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     return () => unsubscribe();
   }, [session.id, user.id, session.partner.id]);
 
-  // Handle standard text send
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim()) return;
-    const text = inputText;
-    setInputText('');
-    await sendMessageToFirestore(text, 'text');
-  };
+  useEffect(() => {
+    const clearGhostBadge = async () => {
+      const userConvRef = doc(db, "users", user.id, "conversations", session.partner.id);
+      try {
+        await setDoc(userConvRef, { unreadCount: 0 }, { merge: true });
+      } catch (error) {
+        console.error("Failed to clear ghost badge:", error);
+      }
+    };
+    clearGhostBadge();
+  }, [user.id, session.partner.id]);
 
-  // Reusable function to execute the batch write for any message type
   const sendMessageToFirestore = async (
     text: string, 
     type: MessageType = 'text', 
-    fileData?: { fileURL: string, fileName: string, fileSize: number, mimeType: string }
+    fileData?: { fileURL: string, fileName: string, fileSize: number, mimeType: string, audioDuration?: number }
   ) => {
     const now = Date.now();
     const batch = writeBatch(db);
@@ -84,7 +96,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     const partnerConvRef = doc(db, "users", session.partner.id, "conversations", user.id);
     const newMessageRef = doc(collection(db, "chats", session.id, "messages"));
 
-    const previewText = type === 'text' ? text : `[${type === 'image' ? '📷 Image' : type === 'video' ? '🎥 Video' : '📄 File'}]`;
+    const previewText = type === 'text' ? text : `[${type === 'image' ? '🖼️ Image' : type === 'video' ? '🎥 Video' : type === 'voice' ? '🎤 Voice Message' : '📁 File'}]`;
 
     batch.set(userConvRef, {
       lastMessage: previewText,
@@ -121,6 +133,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
       messagePayload.fileName = fileData.fileName;
       messagePayload.fileSize = fileData.fileSize;
       messagePayload.mimeType = fileData.mimeType;
+      if (fileData.audioDuration) messagePayload.audioDuration = fileData.audioDuration;
     }
 
     batch.set(newMessageRef, messagePayload);
@@ -132,7 +145,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     }
   };
 
-  // Upload Logic
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -180,7 +192,42 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     );
   };
 
-  // Handle Message Deletion (Unsend)
+  const handleVoiceUpload = async (audioBlob: Blob, duration: number) => {
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    const uniqueFileName = `voice_${Date.now()}_${Math.random().toString(36).substring(7)}.webm`;
+    const storageRef = ref(storage, `chat_attachments/${session.id}/${uniqueFileName}`);
+    
+    const uploadTask = uploadBytesResumable(storageRef, audioBlob);
+
+    uploadTask.on('state_changed', 
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setUploadProgress(progress);
+      }, 
+      (error) => {
+        console.error("Voice upload failed:", error);
+        alert("Voice message failed to send.");
+        setIsUploading(false);
+      }, 
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        
+        await sendMessageToFirestore('', 'voice', {
+          fileURL: downloadURL,
+          fileName: uniqueFileName,
+          fileSize: audioBlob.size,
+          mimeType: 'audio/webm',
+          audioDuration: duration 
+        });
+
+        setIsUploading(false);
+        setUploadProgress(0);
+      }
+    );
+  };
+
   const handleDeleteMessage = async (message: ChatMessage) => {
     if (!window.confirm("Unsend this message for everyone?")) return;
 
@@ -201,28 +248,36 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
       );
       const snapshot = await getDocs(q);
 
-      const batch = writeBatch(db);
       const userConvRef = doc(db, "users", user.id, "conversations", session.partner.id);
       const partnerConvRef = doc(db, "users", session.partner.id, "conversations", user.id);
 
+      // FIX 2: Stop using writeBatch here so a permission error on the partner's doc 
+      // doesn't stop your own doc from successfully updating.
       if (snapshot.empty) {
-        batch.delete(userConvRef);
-        batch.delete(partnerConvRef);
+        await deleteDoc(userConvRef).catch(e => console.warn("Could not clear own preview", e));
+        await deleteDoc(partnerConvRef).catch(e => console.warn("Permission denied for partner doc, skipping", e));
       } else {
         const newLastMsg = snapshot.docs[0].data() as ChatMessage;
         const previewText = newLastMsg.type === 'text' || !newLastMsg.type 
           ? newLastMsg.text 
-          : `[${newLastMsg.type === 'image' ? '📷 Image' : newLastMsg.type === 'video' ? '🎥 Video' : '📄 File'}]`;
+          : `[${newLastMsg.type === 'image' ? '🖼️ Image' : newLastMsg.type === 'video' ? '🎥 Video' : newLastMsg.type === 'voice' ? '🎤 Voice Message' : '📁 File'}]`;
 
-        batch.set(userConvRef, { lastMessage: previewText, timestamp: newLastMsg.timestamp }, { merge: true });
-        batch.set(partnerConvRef, { lastMessage: previewText, timestamp: newLastMsg.timestamp }, { merge: true });
+        await setDoc(userConvRef, { lastMessage: previewText, timestamp: newLastMsg.timestamp }, { merge: true }).catch(e => console.warn(e));
+        await setDoc(partnerConvRef, { lastMessage: previewText, timestamp: newLastMsg.timestamp }, { merge: true }).catch(e => console.warn(e));
       }
 
-      await batch.commit();
     } catch (error) {
       console.error("Error unsending message:", error);
       alert("Failed to unsend message.");
     }
+  };
+
+  const handleCallClick = (type: 'voice' | 'video') => {
+    if (!partnerStatus?.isOnline) {
+      alert(`${session.partner.name} is currently offline and cannot receive calls.`);
+      return;
+    }
+    onCall(session.partner.id, type); 
   };
 
   return (
@@ -239,6 +294,28 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
         <div className="flex-1">
           <h3 className="font-bold text-sm leading-tight">{session.partner.name}</h3>
           <p className="text-[10px] opacity-80">{partnerStatus?.isOnline ? 'Online' : 'Offline'}</p>
+        </div>
+
+        {/* Call Buttons */}
+        <div className="flex items-center space-x-4 pr-2">
+          <button 
+            onClick={() => handleCallClick('video')} 
+            className={`transition-colors ${partnerStatus?.isOnline ? 'hover:text-gray-200 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+            title="Video Call"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+            </svg>
+          </button>
+          <button 
+            onClick={() => handleCallClick('voice')} 
+            className={`transition-colors ${partnerStatus?.isOnline ? 'hover:text-gray-200 cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+            title="Voice Call"
+          >
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -277,9 +354,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
       </div>
 
       {/* Input Field Area */}
-      <div className="flex-none bg-[#f0f2f5] p-2 relative z-20">
-        
-        {/* Hidden File Input */}
+      <div className="flex-none relative z-20">
         <input 
           type="file" 
           ref={fileInputRef} 
@@ -288,45 +363,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
           accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
         />
 
-        <form onSubmit={handleSend} className="flex w-full items-center space-x-2">
-          
-          {/* 1. Combined Input and Attachment Bubble */}
-          <div className="flex-1 flex items-center bg-white rounded-full pl-4 pr-1 py-1 shadow-sm focus-within:ring-1 focus-within:ring-[#00a884]">
-            <input
-              type="text"
-              className="flex-1 bg-transparent border-none py-1.5 text-sm focus:outline-none"
-              placeholder="Type a message"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              disabled={isUploading}
-            />
-
-            {/* 2. Attachment Button (Now inside the bubble!) */}
-            <button 
-              type="button" 
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="p-1.5 text-gray-400 hover:text-[#00a884] transition-colors flex-shrink-0 rounded-full hover:bg-gray-50 disabled:opacity-50 mr-1"
-              title="Attach file"
-            >
-              <svg className="w-5 h-5 transform rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-              </svg>
-            </button>
-          </div>
-
-          {/* 3. Send Button */}
-          <button 
-            type="submit" 
-            disabled={!inputText.trim() || isUploading}
-            className={`p-2.5 rounded-full transition-colors flex-shrink-0 ${inputText.trim() && !isUploading ? 'bg-[#00a884] text-white hover:bg-[#008f6f]' : 'bg-gray-300 text-gray-100'}`}
-          >
-            <svg className="w-5 h-5 ml-1 transform -rotate-45" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-            </svg>
-          </button>
-          
-        </form>
+        <ChatInput 
+          onSendMessage={(text) => sendMessageToFirestore(text, 'text')}
+          onSendVoice={handleVoiceUpload}
+          onTriggerFileSelect={() => fileInputRef.current?.click()}
+          isUploading={isUploading}
+        />
       </div>
     </div>
   );

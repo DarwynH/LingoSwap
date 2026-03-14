@@ -1,0 +1,11 @@
+7th Commit
+
+Added:
+   Folder:
+   hooks
+   
+   File:
+   ChatInput.tsx useVoiceRecorder.ts
+
+Modified:
+MessageBubble.tsx ChatRoom.tsx types.ts app.tsx
