@@ -24,8 +24,6 @@ const App: React.FC = () => {
 
   const [incomingCall, setIncomingCall] = useState<CallData | null>(null);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
-  
-  // NEW: State to track if the current active call is voice or video
   const [activeCallType, setActiveCallType] = useState<'voice' | 'video'>('voice');
 
   useEffect(() => {
@@ -77,7 +75,6 @@ const App: React.FC = () => {
             }
           });
         } else {
-          // CORRECT PLACEMENT: The user is authenticated, but has no Firestore document yet.
           setUser({
             id: firebaseUser.uid,
             email: firebaseUser.email || '',
@@ -88,7 +85,6 @@ const App: React.FC = () => {
           setView('setup');
         }
       } else {
-        // CORRECT PLACEMENT: The user is entirely logged out.
         setUser(null);
         setView('auth');
       }
@@ -139,11 +135,38 @@ const App: React.FC = () => {
     setView('chat');
   };
 
-  // UPDATED: Now accepts callType to set the state
-  const handleStartCall = (partner: UserProfile, callId?: string, type: 'voice' | 'video' = 'voice') => {
+  // FIXED: Now properly creates the Firestore document if making a new call
+  const handleStartCall = async (partner: UserProfile, existingCallId?: string, type: 'voice' | 'video' = 'voice') => {
+    if (!user) return;
+
+    let callIdToUse = existingCallId;
+
+    // If there is no existing call ID, we are the CALLER initiating a new call
+    if (!existingCallId) {
+      try {
+        const callDocRef = doc(collection(db, 'calls'));
+        callIdToUse = callDocRef.id;
+
+        // This is the CRITICAL missing step! Tell Firestore the call is ringing.
+        await setDoc(callDocRef, {
+          callerId: user.id,
+          receiverId: partner.id,
+          callerName: user.name,
+          callerAvatar: user.avatar,
+          type: type,
+          status: 'ringing', 
+          createdAt: Date.now()
+        });
+      } catch (error) {
+        console.error("Failed to initiate call in Firestore:", error);
+        alert("Could not start call. Check your network or adblocker.");
+        return; // Stop here if Firestore write fails
+      }
+    }
+
     setActiveSession({ id: `call_${partner.id}`, partner, messages: [] });
-    setActiveCallId(callId || null);
-    setActiveCallType(type); // Save the type
+    setActiveCallId(callIdToUse || null);
+    setActiveCallType(type); 
     setView('call');
   };
 
@@ -181,9 +204,9 @@ const App: React.FC = () => {
         targetLanguage: Language.SPANISH
       };
       
-      // UPDATED: Pass the incoming call type so the receiver knows it's a video call
       const type = incomingCall.type || 'voice'; 
       setIncomingCall(null);
+      // We pass the existing call ID so it joins instead of creating a new one
       handleStartCall(partner, incomingCall.id, type);
     } catch (error) {
       console.error("Error accepting call:", error);
@@ -218,7 +241,6 @@ const App: React.FC = () => {
           <img src={incomingCall.callerAvatar} alt="caller" className="w-12 h-12 rounded-full border-2 border-[#25d366]" />
           <div>
             <h4 className="font-bold">{incomingCall.callerName}</h4>
-            {/* UPDATED: Dynamically show Voice or Video */}
             <p className="text-sm text-[#25d366]">
               Incoming {incomingCall.type === 'video' ? 'video' : 'voice'} call...
             </p>
@@ -251,8 +273,8 @@ const App: React.FC = () => {
           user={user} 
           session={activeSession} 
           onBack={() => setView('main')} 
-          // UPDATED: Receive both callId and type from ChatRoom
-          onCall={(callId, type) => handleStartCall(activeSession.partner, callId, type)}
+          // FIXED: Pass undefined for the callId so App.tsx knows to create a NEW call
+          onCall={(partnerId, type) => handleStartCall(activeSession.partner, undefined, type)}
         />
       )}
 
@@ -261,7 +283,7 @@ const App: React.FC = () => {
           currentUser={user}        
           callId={activeCallId}     
           partner={activeSession.partner} 
-          callType={activeCallType} // NEW: Pass the type down!
+          callType={activeCallType} 
           onClose={() => setView('chat')} 
         />
       )}

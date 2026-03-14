@@ -23,8 +23,8 @@ export interface UserProfile {
   lastSeen?: number;
 }
 
-// NEW: Define message types
-export type MessageType = 'text' | 'image' | 'video' | 'file';
+// UPDATED: Added 'voice' to MessageType
+export type MessageType = 'text' | 'image' | 'video' | 'file' | 'voice';
 
 export interface ChatMessage {
   id: string;
@@ -34,12 +34,13 @@ export interface ChatMessage {
   timestamp: number;
   read: boolean; 
   readAt?: number | null; 
-  // NEW: Attachment fields
   type?: MessageType;
   fileURL?: string;
   fileName?: string;
   fileSize?: number;
   mimeType?: string;
+  // NEW: Added for voice messages
+  audioDuration?: number;
 }
 
 export interface ChatSession {
