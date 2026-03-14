@@ -1,0 +1,5 @@
+Sitxh Commit Attachment, unsent message feature
+
+Modified:
+Firebase Console > Storage > Rules
+types.ts MessageBubble.tsx ChatRoom.tsx

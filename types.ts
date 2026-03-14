@@ -17,20 +17,29 @@ export interface UserProfile {
   nativeLanguage: Language;
   targetLanguage: Language;
   bio: string;
-  lastMessageAt?: number; // Fixes sorting error
+  lastMessageAt?: number; 
   avatar: string;
   isOnline?: boolean;
   lastSeen?: number;
 }
 
+// NEW: Define message types
+export type MessageType = 'text' | 'image' | 'video' | 'file';
+
 export interface ChatMessage {
   id: string;
   senderId: string;
-  receiverId: string; // NEW: Added for read receipts
+  receiverId: string; 
   text: string;
   timestamp: number;
-  read: boolean; // NEW: Added for read receipts
-  readAt?: number | null; // NEW: Added for read receipts
+  read: boolean; 
+  readAt?: number | null; 
+  // NEW: Attachment fields
+  type?: MessageType;
+  fileURL?: string;
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
 }
 
 export interface ChatSession {
@@ -39,8 +48,6 @@ export interface ChatSession {
   messages: ChatMessage[];
   lastMessage?: string;
 }
-
-//New line added Below Log  3/7 3/8
 
 export type CallStatus = 'ringing' | 'connecting' | 'active' | 'rejected' | 'ended';
 
@@ -51,13 +58,12 @@ export interface CallData {
   callerName: string;
   callerAvatar: string;
   status: CallStatus;
-  type: 'voice' | 'video'; // NEW: Track the type of call
+  type: 'voice' | 'video'; 
   offer?: RTCSessionDescriptionInit;
   answer?: RTCSessionDescriptionInit;
   createdAt: number;
 }
 
-// NEW: Added for chat list metadata and unread indicators
 export interface ConversationPreview {
   partnerId: string;
   partnerName: string;
