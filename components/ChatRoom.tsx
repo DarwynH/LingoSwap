@@ -272,11 +272,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     }
   };
 
+  // NEW: Handle checking online status before initiating a call
   const handleCallClick = (type: 'voice' | 'video') => {
     if (!partnerStatus?.isOnline) {
       alert(`${session.partner.name} is currently offline and cannot receive calls.`);
       return;
     }
+    // CRITICAL FIX: Pass session.partner.id instead of session.id
     onCall(session.partner.id, type); 
   };
 
@@ -296,7 +298,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
           <p className="text-[10px] opacity-80">{partnerStatus?.isOnline ? 'Online' : 'Offline'}</p>
         </div>
 
-        {/* Call Buttons */}
+        {/* Call Buttons - UPDATED with handleCallClick */}
         <div className="flex items-center space-x-4 pr-2">
           <button 
             onClick={() => handleCallClick('video')} 
