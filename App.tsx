@@ -47,8 +47,9 @@ const App: React.FC = () => {
     };
   }, [incomingCall, view]);
 
-  useEffect(() => {
+useEffect(() => {
     let callUnsub: () => void;
+    let heartbeatInterval: NodeJS.Timeout; // NEW: Track the heartbeat interval
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -56,9 +57,17 @@ const App: React.FC = () => {
         const userDoc = await getDoc(userRef);
 
         if (userDoc.exists()) {
-          await updateDoc(userRef, { isOnline: true });
+          // NEW: Initialize lastSeen on login
+          await updateDoc(userRef, { isOnline: true, lastSeen: Date.now() });
           setUser(userDoc.data() as UserProfile);
           setView('main');
+
+          // NEW: Start Heartbeat - Ping Firestore every 60 seconds
+          heartbeatInterval = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+              updateDoc(userRef, { isOnline: true, lastSeen: Date.now() }).catch(e => console.warn(e));
+            }
+          }, 60000);
 
           const callsQuery = query(
             collection(db, "calls"),
@@ -75,30 +84,29 @@ const App: React.FC = () => {
             }
           });
         } else {
-          setUser({
-            id: firebaseUser.uid,
-            email: firebaseUser.email || '',
-            name: firebaseUser.email?.split('@')[0] || 'New User',
-            avatar: `https://ui-avatars.com/api/?name=${firebaseUser.email?.charAt(0).toUpperCase() || 'U'}&background=random`,
-          } as UserProfile);
-  
-          setView('setup');
+          // ... [Keep existing setup logic] ...
         }
       } else {
         setUser(null);
         setView('auth');
+        if (heartbeatInterval) clearInterval(heartbeatInterval); // Clean up on logout
       }
     });
 
     const handleVisibility = () => {
       if (!auth.currentUser) return;
       const userRef = doc(db, "users", auth.currentUser.uid);
-      updateDoc(userRef, { isOnline: document.visibilityState === 'visible' });
+      // NEW: Update lastSeen when tabbing in/out
+      updateDoc(userRef, { 
+        isOnline: document.visibilityState === 'visible',
+        lastSeen: Date.now() 
+      }).catch(e => console.warn(e));
     };
 
     const handleUnload = () => {
       if (auth.currentUser) {
         const userRef = doc(db, "users", auth.currentUser.uid);
+        // NEW: Ensure lastSeen is recorded on normal exits
         updateDoc(userRef, { isOnline: false, lastSeen: Date.now() });
       }
     };
@@ -109,6 +117,7 @@ const App: React.FC = () => {
     return () => {
       unsubscribe();
       if (callUnsub) callUnsub();
+      if (heartbeatInterval) clearInterval(heartbeatInterval); // NEW: Clean up heartbeat
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener('beforeunload', handleUnload);
     };
