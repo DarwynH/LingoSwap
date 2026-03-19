@@ -1,5 +1,5 @@
 // components/Chat/ChatInput.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 
 interface ChatInputProps {
@@ -40,78 +40,86 @@ const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   return (
-    <div className="flex-none bg-[#f0f2f5] p-2 relative z-20 w-full flex items-center space-x-2">
+    <div className="w-full px-3 pt-2 pb-5 sm:pb-4 flex items-end space-x-2 bg-white">
       
+      {/* Attachment Button - Added active:scale-[0.92] and specific duration */}
+      {!isRecording && (
+        <button 
+          type="button" 
+          onClick={onTriggerFileSelect}
+          disabled={isUploading}
+          className="p-2 flex-shrink-0 text-gray-400 hover:text-blue-500 rounded-full hover:bg-gray-100 mb-0.5 disabled:opacity-50 transition-all duration-200 active:scale-[0.92]"
+          title="Attach file"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+      )}
+
+      {/* Input / Recording Area - Added duration-300 and ease-out for smoother focus states */}
       {isRecording ? (
-        // --- RECORDING STATE UI ---
-        <div className="flex-1 flex items-center bg-white rounded-full px-4 py-2 shadow-sm justify-between animate-pulse">
-          <div className="flex items-center space-x-2 text-red-500">
-            <div className="w-3 h-3 bg-red-500 rounded-full animate-ping"></div>
-            <span className="font-mono">{formatTime(recordingTime)}</span>
+        <div className="flex-1 flex items-center bg-red-50 rounded-full px-5 py-2.5 justify-between border border-red-100 mb-0.5 transition-all duration-300">
+          <div className="flex items-center space-x-3 text-red-500">
+            <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></div>
+            <span className="font-mono text-sm font-medium">{formatTime(recordingTime)}</span>
           </div>
           <button 
             type="button" 
             onClick={cancelRecording}
-            className="text-sm text-gray-500 hover:text-red-500 font-medium px-2"
+            className="text-sm text-red-600 hover:text-red-800 font-semibold px-2 transition-colors duration-200 active:scale-95"
           >
             Cancel
           </button>
         </div>
       ) : (
-        // --- NORMAL STATE UI ---
-        <form onSubmit={handleTextSubmit} className="flex-1 flex items-center bg-white rounded-full pl-4 pr-1 py-1 shadow-sm focus-within:ring-1 focus-within:ring-[#00a884]">
+        <form onSubmit={handleTextSubmit} className="flex-1 flex items-center bg-gray-100 rounded-3xl border border-transparent focus-within:border-blue-200 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-50 transition-all duration-300 ease-out mb-0.5">
           <input
             type="text"
-            className="flex-1 bg-transparent border-none py-1.5 text-sm focus:outline-none"
-            placeholder="Type a message"
+            className="flex-1 bg-transparent border-none px-4 py-2 text-[15px] text-gray-900 focus:outline-none placeholder-gray-400"
+            placeholder="Message"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             disabled={isUploading}
+            autoComplete="off"
           />
-          <button 
-            type="button" 
-            onClick={onTriggerFileSelect}
-            disabled={isUploading}
-            className="p-1.5 text-gray-400 hover:text-[#00a884] transition-colors rounded-full hover:bg-gray-50 mr-1 disabled:opacity-50"
-          >
-             <svg className="w-5 h-5 transform rotate-45" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-              </svg>
-          </button>
         </form>
       )}
 
-      {/* --- SEND / MIC BUTTON --- */}
-      {inputText.trim() && !isRecording ? (
-        <button 
-          onClick={handleTextSubmit}
-          disabled={isUploading}
-          className="p-3 bg-[#00a884] text-white rounded-full hover:bg-[#008f6f] transition-colors shadow-sm disabled:opacity-50"
-        >
-          <svg className="w-5 h-5 ml-1 transform -rotate-45" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-          </svg>
-        </button>
-      ) : isRecording ? (
-        <button 
-          onClick={handleSendRecording}
-          className="p-3 bg-[#00a884] text-white rounded-full hover:bg-[#008f6f] transition-colors shadow-sm"
-        >
-          <svg className="w-5 h-5 ml-1 transform -rotate-45" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-          </svg>
-        </button>
-      ) : (
-        <button 
-          onClick={startRecording}
-          disabled={isUploading}
-          className="p-3 bg-[#00a884] text-white rounded-full hover:bg-[#008f6f] transition-colors shadow-sm disabled:opacity-50"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-          </svg>
-        </button>
-      )}
+      {/* Primary Action Buttons - Added active:scale-[0.92] for satisfying tactile feedback */}
+      <div className="flex-shrink-0 mb-0.5 relative">
+        {inputText.trim() && !isRecording ? (
+          <button 
+            onClick={handleTextSubmit}
+            disabled={isUploading}
+            className="p-2.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 shadow-sm disabled:opacity-50 flex items-center justify-center transition-all duration-200 active:scale-[0.92]"
+          >
+            <svg className="w-5 h-5 ml-0.5 transform -rotate-45" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+          </button>
+        ) : isRecording ? (
+          <button 
+            onClick={handleSendRecording}
+            className="p-2.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 shadow-sm flex items-center justify-center transition-all duration-200 active:scale-[0.92]"
+          >
+            <svg className="w-5 h-5 ml-0.5 transform -rotate-45" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+            </svg>
+          </button>
+        ) : (
+          <button 
+            onClick={startRecording}
+            disabled={isUploading}
+            className="p-2.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 shadow-sm disabled:opacity-50 flex items-center justify-center transition-all duration-200 active:scale-[0.92]"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+          </button>
+        )}
+      </div>
+      
     </div>
   );
 };
