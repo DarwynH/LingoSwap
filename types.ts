@@ -1,3 +1,4 @@
+// types.ts
 export enum Language {
   ENGLISH = 'English',
   SPANISH = 'Spanish',
@@ -21,9 +22,9 @@ export interface UserProfile {
   avatar: string;
   isOnline?: boolean;
   lastSeen?: number;
+  favoriteMessages?: string[]; 
 }
 
-// UPDATED: Added 'voice' to MessageType
 export type MessageType = 'text' | 'image' | 'video' | 'file' | 'voice';
 
 export interface ChatMessage {
@@ -39,8 +40,13 @@ export interface ChatMessage {
   fileName?: string;
   fileSize?: number;
   mimeType?: string;
-  // NEW: Added for voice messages
   audioDuration?: number;
+  replyTo?: {
+    messageId: string;
+    text: string;
+    senderId: string;
+    senderName: string;
+  };
 }
 
 export interface ChatSession {
@@ -72,4 +78,19 @@ export interface ConversationPreview {
   lastMessage: string;
   timestamp: number;
   unreadCount: number; 
+}
+
+// NEW: Types for saved items (Phrasebook & Study Later)
+export type SavedItemType = 'phrasebook' | 'study_later';
+
+export interface SavedItem {
+  id: string; 
+  userId: string;
+  chatId: string;
+  messageId: string;
+  type: SavedItemType;
+  text: string;
+  senderId: string;
+  senderName: string;
+  timestamp: number;
 }

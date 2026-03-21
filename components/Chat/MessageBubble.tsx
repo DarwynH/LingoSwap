@@ -8,13 +8,21 @@ interface MessageBubbleProps {
   isMe: boolean;
   isGroupStart?: boolean;
   isGroupEnd?: boolean;
+  isFavorited?: boolean;
+  isPhrasebookSaved?: boolean;
+  isStudyLater?: boolean;
+  onReplyClick?: (messageId: string) => void;
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({ 
   message, 
   isMe, 
   isGroupStart = true, 
-  isGroupEnd = true 
+  isGroupEnd = true,
+  isFavorited = false,
+  isPhrasebookSaved = false,
+  isStudyLater = false,
+  onReplyClick
 }) => {
   const [showTranslation, setShowTranslation] = useState(false);
   const [translatedText, setTranslatedText] = useState<string | null>(null);
@@ -61,7 +69,6 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     ? `bg-blue-600 text-white shadow-sm ${shapeClasses}` 
     : `bg-gray-800 text-gray-100 shadow-sm border border-gray-700/50 ${shapeClasses}`;
   
-  // Brightened the outgoing timestamp slightly (text-blue-100) for better desktop contrast
   const timeColor = isMe ? 'text-blue-100' : 'text-gray-400';
   const dividerColor = isMe ? 'border-blue-500/50' : 'border-gray-700';
   const fileCardColor = isMe ? 'bg-white/10 hover:bg-white/20' : 'bg-gray-900/50 hover:bg-gray-700';
@@ -70,16 +77,35 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const fileSubtextColor = isMe ? 'text-blue-200' : 'text-gray-400';
 
   return (
-    <div className={`max-w-[85%] sm:max-w-[75%] lg:max-w-xl px-4 py-2.5 relative transition-all duration-200 ${bubbleColor}`}>
+    <div className={`max-w-[85%] sm:max-w-[75%] lg:max-w-xl px-3.5 py-2 sm:px-4 sm:py-2.5 relative transition-all duration-200 ${bubbleColor}`}>
       
+      {/* Reply Context Block */}
+      {message.replyTo && (
+        <div 
+          onClick={() => onReplyClick && onReplyClick(message.replyTo!.messageId)}
+          className={`mb-2 px-3 py-1.5 rounded-lg cursor-pointer transition-colors border-l-4 text-[13px] ${
+            isMe 
+              ? 'bg-blue-700/50 border-blue-300 hover:bg-blue-700/80 text-blue-50' 
+              : 'bg-gray-900/40 border-gray-500 hover:bg-gray-900/60 text-gray-300'
+          }`}
+        >
+          <div className="font-bold text-[11px] mb-0.5 opacity-90 tracking-wide">
+            {message.replyTo.senderName}
+          </div>
+          <div className="truncate opacity-80 text-[12px]">
+            {message.replyTo.text}
+          </div>
+        </div>
+      )}
+
       {message.type === 'image' && message.fileURL && (
         <a href={message.fileURL} target="_blank" rel="noopener noreferrer">
-          <img src={message.fileURL} alt={message.fileName} className="w-full max-w-[250px] rounded-xl mb-2 object-cover" />
+          <img src={message.fileURL} alt={message.fileName} className="w-full max-w-[220px] sm:max-w-[250px] rounded-xl mb-2 object-cover" />
         </a>
       )}
 
       {message.type === 'video' && message.fileURL && (
-        <video src={message.fileURL} controls className="w-full max-w-[250px] rounded-xl mb-2 bg-black" />
+        <video src={message.fileURL} controls className="w-full max-w-[220px] sm:max-w-[250px] rounded-xl mb-2 bg-black" />
       )}
 
       {message.type === 'file' && message.fileURL && (
@@ -130,11 +156,32 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         ) : <span /> }
 
         <div className="flex items-center space-x-1 flex-shrink-0 ml-2">
+          
+          {/* Study Later Indicator */}
+          {isStudyLater && (
+            <svg className={`w-3.5 h-3.5 mr-0.5 ${isMe ? 'text-purple-200' : 'text-purple-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          )}
+
+          {/* Phrasebook Indicator */}
+          {isPhrasebookSaved && (
+            <svg className={`w-3.5 h-3.5 mr-0.5 ${isMe ? 'text-emerald-200' : 'text-emerald-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+          )}
+
+          {/* Favorite Star */}
+          {isFavorited && (
+            <svg className={`w-3.5 h-3.5 mr-0.5 ${isMe ? 'text-amber-300' : 'text-amber-500'}`} fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+            </svg>
+          )}
+
           <span className={`text-[10.5px] font-medium tracking-wide ${timeColor}`}>
             {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
           
-          {/* IMPROVED READ RECEIPT */}
           {isMe && (
             <svg 
               className={`w-[18px] h-[18px] ml-1.5 transition-all duration-300 ${

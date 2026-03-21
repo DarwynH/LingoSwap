@@ -12,19 +12,31 @@ import {
   getDocs,
   limit,
   setDoc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+  where // Imported where for savedItems query
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import React, { useState, useRef, useEffect } from 'react';
-import { UserProfile, ChatMessage, ChatSession, MessageType } from '../types';
+import { UserProfile, ChatMessage, ChatSession, MessageType, SavedItem, SavedItemType } from '../types';
 import MessageBubble from './Chat/MessageBubble';
 import Avatar from './ui/Avatar';
 import ChatInput from './Chat/ChatInput';
+import { createPortal } from 'react-dom';
 
 interface ChatRoomProps {
   user: UserProfile;
   session: ChatSession;
   onBack: () => void;
   onCall: (partnerId: string, type: 'voice' | 'video') => void;
+}
+
+export interface ReplyTarget {
+  messageId: string;
+  text: string;
+  senderId: string;
+  senderName: string;
 }
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB limit
@@ -62,27 +74,49 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // State to track if partner is truly online (Heartbeat logic)
+  // Status and active UI states
   const [isPartnerOnline, setIsPartnerOnline] = useState(false);
+  const [menuConfig, setMenuConfig] = useState<{ 
+    id: string; 
+    rect: { top: number; bottom: number; left: number; right: number };
+    position: 'top' | 'bottom'; 
+    align: 'left' | 'right' 
+  } | null>(null);
   
-  // State to track which message has its action menu open
-  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  // Group C & Reply States
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
+  const [favorites, setFavorites] = useState<string[]>(user.favoriteMessages || []);
+
+  // Group A (Phrasebook & Study Later) State
+  const [savedStates, setSavedStates] = useState<Record<string, { phrasebook: boolean; study_later: boolean }>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const messageRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // Close the context menu if the user clicks anywhere else on the screen
+  const scrollToOriginalMessage = (messageId: string) => {
+    const el = messageRefs.current[messageId];
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('bg-gray-800/60', 'transition-colors', 'duration-500', 'rounded-xl');
+      setTimeout(() => el.classList.remove('bg-gray-800/60', 'rounded-xl'), 1500);
+    }
+  };
+
+  // Close the context menu if the user clicks anywhere else
   useEffect(() => {
-    const handleClickOutside = () => setActiveMenuId(null);
-    if (activeMenuId) {
+    const handleClickOutside = () => setMenuConfig(null);
+    if (menuConfig) {
       document.addEventListener('click', handleClickOutside);
     }
     return () => document.removeEventListener('click', handleClickOutside);
-  }, [activeMenuId]);
+  }, [menuConfig]);
 
   // Listen to partner's user document
   useEffect(() => {
@@ -103,11 +137,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
         setIsPartnerOnline(false);
         return;
       }
-
-      const isRecent = partnerStatus.lastSeen
-        ? Date.now() - partnerStatus.lastSeen < 120000
-        : false;
-
+      const isRecent = partnerStatus.lastSeen ? Date.now() - partnerStatus.lastSeen < 120000 : false;
       setIsPartnerOnline(partnerStatus.isOnline && isRecent);
     };
 
@@ -116,6 +146,28 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
 
     return () => clearInterval(stalenessInterval);
   }, [partnerStatus]);
+
+  // Listen to saved items for this specific chat
+  useEffect(() => {
+    const q = query(
+      collection(db, 'users', user.id, 'savedItems'), 
+      where('chatId', '==', session.id)
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newStates: Record<string, { phrasebook: boolean; study_later: boolean }> = {};
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data() as SavedItem;
+        if (!newStates[data.messageId]) {
+          newStates[data.messageId] = { phrasebook: false, study_later: false };
+        }
+        newStates[data.messageId][data.type] = true;
+      });
+      setSavedStates(newStates);
+    });
+
+    return () => unsubscribe();
+  }, [user.id, session.id]);
 
   // Listen to chat messages and mark read
   useEffect(() => {
@@ -159,6 +211,33 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     return () => unsubscribe();
   }, [session.id, user.id, session.partner.id]);
 
+  // Actively pin the scroll position to the bottom when the keyboard resizes
+  useEffect(() => {
+    const handleViewportChange = () => {
+      if (!window.visualViewport) return;
+      
+      if (chatContainerRef.current) {
+        chatContainerRef.current.style.height = `${window.visualViewport.height}px`;
+      }
+      
+      window.scrollTo(0, 0);
+
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      }
+    };
+
+    window.visualViewport?.addEventListener('resize', handleViewportChange);
+    window.visualViewport?.addEventListener('scroll', handleViewportChange);
+    
+    handleViewportChange();
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleViewportChange);
+      window.visualViewport?.removeEventListener('scroll', handleViewportChange);
+    };
+  }, []);
+
   // Clear ghost notification badges
   useEffect(() => {
     const clearGhostBadge = async () => {
@@ -173,11 +252,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     clearGhostBadge();
   }, [user.id, session.partner.id]);
 
-  const sendMessageToFirestore = async (
-    text: string,
-    type: MessageType = 'text',
-    fileData?: any
-  ) => {
+  const sendMessageToFirestore = async (text: string, type: MessageType = 'text', fileData?: any) => {
     const now = Date.now();
     const batch = writeBatch(db);
 
@@ -185,47 +260,29 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     const partnerConvRef = doc(db, 'users', session.partner.id, 'conversations', user.id);
     const newMessageRef = doc(collection(db, 'chats', session.id, 'messages'));
 
-    const previewText =
-      type === 'text'
-        ? text
-        : `[${type === 'image'
-            ? '🖼️ Image'
-            : type === 'video'
-            ? '🎥 Video'
-            : type === 'voice'
-            ? '🎤 Voice Message'
-            : '📁 File'}]`;
+    const previewText = type === 'text' 
+      ? text 
+      : `[${type.charAt(0).toUpperCase() + type.slice(1)}]`;
 
-    batch.set(
-      userConvRef,
-      {
-        lastMessage: previewText,
-        timestamp: now,
-        partnerId: session.partner.id,
-        partnerName: session.partner.name,
-        partnerAvatar: session.partner.avatar,
-      },
-      { merge: true }
-    );
+    batch.set(userConvRef, {
+      lastMessage: previewText,
+      timestamp: now,
+      partnerId: session.partner.id,
+      partnerName: session.partner.name,
+      partnerAvatar: session.partner.avatar,
+    }, { merge: true });
 
-    batch.set(
-      partnerConvRef,
-      {
-        lastMessage: previewText,
-        timestamp: now,
-        partnerId: user.id,
-        partnerName: user.name,
-        partnerAvatar: user.avatar,
-        unreadCount: increment(1),
-      },
-      { merge: true }
-    );
+    batch.set(partnerConvRef, {
+      lastMessage: previewText,
+      timestamp: now,
+      partnerId: user.id,
+      partnerName: user.name,
+      partnerAvatar: user.avatar,
+      unreadCount: increment(1),
+    }, { merge: true });
 
     batch.update(doc(db, 'users', user.id), { lastMessage: previewText, lastMessageAt: now });
-    batch.update(doc(db, 'users', session.partner.id), {
-      lastMessage: previewText,
-      lastMessageAt: now,
-    });
+    batch.update(doc(db, 'users', session.partner.id), { lastMessage: previewText, lastMessageAt: now });
 
     const messagePayload: any = {
       text,
@@ -245,10 +302,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
       if (fileData.audioDuration) messagePayload.audioDuration = fileData.audioDuration;
     }
 
+    if (replyTarget) {
+      messagePayload.replyTo = {
+        messageId: replyTarget.messageId,
+        text: replyTarget.text,
+        senderId: replyTarget.senderId,
+        senderName: replyTarget.senderName,
+      };
+    }
+
     batch.set(newMessageRef, messagePayload);
 
     try {
       await batch.commit();
+      setReplyTarget(null);
     } catch (error) {
       console.error('Chat send error:', error);
     }
@@ -270,9 +337,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     setIsUploading(true);
     setUploadProgress(0);
 
-    const uniqueFileName = `${Date.now()}_${Math.random()
-      .toString(36)
-      .substring(7)}.${file.name.split('.').pop()}`;
+    const uniqueFileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${file.name.split('.').pop()}`;
     const storageRef = ref(storage, `chat_attachments/${session.id}/${uniqueFileName}`);
     const uploadTask = uploadBytesResumable(storageRef, file);
 
@@ -352,20 +417,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
         await deleteDoc(partnerConvRef).catch((e) => console.warn(e));
       } else {
         const newLastMsg = snapshot.docs[0].data() as ChatMessage;
-        const previewText =
-          newLastMsg.type === 'text' || !newLastMsg.type ? newLastMsg.text : '[Attachment]';
+        const previewText = newLastMsg.type === 'text' || !newLastMsg.type ? newLastMsg.text : '[Attachment]';
 
-        await setDoc(
-          userConvRef,
-          { lastMessage: previewText, timestamp: newLastMsg.timestamp },
-          { merge: true }
-        ).catch((e) => console.warn(e));
-
-        await setDoc(
-          partnerConvRef,
-          { lastMessage: previewText, timestamp: newLastMsg.timestamp },
-          { merge: true }
-        ).catch((e) => console.warn(e));
+        await setDoc(userConvRef, { lastMessage: previewText, timestamp: newLastMsg.timestamp }, { merge: true }).catch((e) => console.warn(e));
+        await setDoc(partnerConvRef, { lastMessage: previewText, timestamp: newLastMsg.timestamp }, { merge: true }).catch((e) => console.warn(e));
       }
     } catch (error) {
       console.error('Error unsending:', error);
@@ -381,8 +436,61 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
     onCall(session.partner.id, type);
   };
 
+  const handleReplyMessage = (msg: ChatMessage) => {
+    setReplyTarget({
+      messageId: msg.id,
+      text: msg.type === 'text' || !msg.type ? msg.text : `[${msg.type.charAt(0).toUpperCase() + msg.type.slice(1)}]`,
+      senderId: msg.senderId,
+      senderName: msg.senderId === user.id ? user.name : session.partner.name
+    });
+  };
+
+  const handleCancelReply = () => setReplyTarget(null);
+
+  const handleToggleFavorite = async (msgId: string, currentlyFavorited: boolean) => {
+    const userRef = doc(db, 'users', user.id);
+    try {
+      if (currentlyFavorited) {
+        await updateDoc(userRef, { favoriteMessages: arrayRemove(msgId) });
+        setFavorites((prev) => prev.filter((id) => id !== msgId));
+      } else {
+        await updateDoc(userRef, { favoriteMessages: arrayUnion(msgId) });
+        setFavorites((prev) => [...prev, msgId]);
+      }
+    } catch (e) {
+      console.error("Failed to toggle favorite", e);
+    }
+  };
+
+  const handleToggleSave = async (msg: ChatMessage, type: SavedItemType, isCurrentlySaved: boolean) => {
+    const docId = `${msg.id}_${type}`;
+    const docRef = doc(db, 'users', user.id, 'savedItems', docId);
+
+    try {
+      if (isCurrentlySaved) {
+        await deleteDoc(docRef);
+      } else {
+        const savedItem: SavedItem = {
+          id: docId,
+          userId: user.id,
+          chatId: session.id,
+          messageId: msg.id,
+          type,
+          text: msg.text || '', 
+          senderId: msg.senderId,
+          senderName: msg.senderId === user.id ? user.name : session.partner.name,
+          timestamp: Date.now()
+        };
+        await setDoc(docRef, savedItem);
+      }
+    } catch (e) {
+      console.error(`Failed to toggle ${type}`, e);
+      alert(`Could not update ${type.replace('_', ' ')}.`);
+    }
+  };
+
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gray-900">
+    <div ref={chatContainerRef} className="flex flex-col overflow-hidden bg-gray-900 overscroll-none fixed inset-0 w-full max-w-6xl mx-auto z-50">
       <style>{`
         @keyframes chatPopIn {
           0% { opacity: 0; transform: translateY(8px); }
@@ -393,9 +501,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
         }
       `}</style>
 
-      {/* Header - Background stays full width, content is constrained to max-w-4xl */}
+      {/* Header */}
       <div className="flex-none bg-gray-900/80 backdrop-blur-xl border-b border-gray-800 shadow-sm z-20 flex justify-center">
-        <div className="w-full max-w-4xl px-4 py-3.5 flex items-center space-x-3">
+        <div className="w-full max-w-4xl px-4 pb-3.5 pt-[max(0.875rem,env(safe-area-inset-top))] flex items-center space-x-3">
           <button onClick={onBack} className="p-2 -ml-2 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-full transition-all duration-200 active:scale-95">
             <svg className="w-[22px] h-[22px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
           </button>
@@ -422,8 +530,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
         </div>
       </div>
 
-      {/* Messages Area - Scrollbar stays at screen edge, but content is centered */}
-      <div className="flex-1 overflow-y-auto relative bg-gray-900 z-0 scroll-smooth flex justify-center">
+      {/* Messages Area */}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative bg-gray-900 z-0 flex justify-center">
         <div className="w-full max-w-4xl px-4 py-6">
           {messages.map((msg, index) => {
             const prevMsg = messages[index - 1];
@@ -438,6 +546,127 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
             const isGroupEnd = !isGroupedWithNext;
             const marginTop = index === 0 ? 'mt-0' : (isGroupedWithPrev ? 'mt-1' : 'mt-4');
 
+            const isMe = msg.senderId === user.id;
+            const isFavorited = favorites.includes(msg.id);
+            const isPhrasebookSaved = savedStates[msg.id]?.phrasebook || false;
+            const isStudyLater = savedStates[msg.id]?.study_later || false;
+            
+            const isActiveMenu = menuConfig?.id === msg.id;
+
+            const actionMenu = (
+              <div className={`relative flex flex-col justify-start pt-1.5 ${isMe ? 'mr-2' : 'ml-2'}`}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isActiveMenu) {
+                      setMenuConfig(null);
+                    } else {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const shouldOpenUp = (window.innerHeight - rect.bottom) < 250;
+                      const shouldOpenLeft = rect.left > (window.innerWidth / 2);
+                      
+                      setMenuConfig({
+                        id: msg.id,
+                        rect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
+                        position: shouldOpenUp ? 'bottom' : 'top',
+                        align: shouldOpenLeft ? 'right' : 'left'
+                      });
+                    }
+                  }}
+                  className={`p-1.5 rounded-full text-gray-500 hover:text-gray-200 hover:bg-gray-800 transition-all ${
+                    isActiveMenu ? 'opacity-100 bg-gray-800' : 'opacity-0 group-hover:opacity-100'
+                  }`}
+                  title="Message options"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <circle cx="5" cy="12" r="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <circle cx="19" cy="12" r="2" />
+                  </svg>
+                </button>
+
+                {isActiveMenu && typeof document !== 'undefined' && createPortal(
+                  <div 
+                    className="fixed w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl py-1 z-[100] overflow-hidden"
+                    style={{
+                      ...(menuConfig.position === 'top' 
+                        ? { top: menuConfig.rect.bottom + 4 } 
+                        : { bottom: window.innerHeight - menuConfig.rect.top + 4 }),
+                      ...(menuConfig.align === 'left' 
+                        ? { left: Math.max(12, menuConfig.rect.left) } 
+                        : { right: Math.max(12, window.innerWidth - menuConfig.rect.right) })
+                    }}
+                  >
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReplyMessage(msg);
+                        setMenuConfig(null);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-gray-200 hover:bg-gray-700 hover:text-white transition-colors"
+                    >
+                      Reply
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleSave(msg, 'phrasebook', isPhrasebookSaved);
+                        setMenuConfig(null);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-[13px] font-medium transition-colors ${
+                        isPhrasebookSaved 
+                          ? 'text-emerald-400 hover:bg-gray-700 hover:text-emerald-300' 
+                          : 'text-gray-200 hover:bg-gray-700 hover:text-white'
+                      }`}
+                    >
+                      {isPhrasebookSaved ? 'Remove from phrasebook' : 'Save to phrasebook'}
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleSave(msg, 'study_later', isStudyLater);
+                        setMenuConfig(null);
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-[13px] font-medium transition-colors ${
+                        isStudyLater 
+                          ? 'text-purple-400 hover:bg-gray-700 hover:text-purple-300' 
+                          : 'text-gray-200 hover:bg-gray-700 hover:text-white'
+                      }`}
+                    >
+                      {isStudyLater ? 'Remove from study later' : 'Mark as study later'}
+                    </button>
+                    
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleFavorite(msg.id, isFavorited);
+                        setMenuConfig(null);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-amber-400 hover:bg-gray-700 hover:text-amber-300 transition-colors"
+                    >
+                      {isFavorited ? 'Unfavorite' : 'Favorite'}
+                    </button>
+
+                    {isMe && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteMessage(msg);
+                          setMenuConfig(null);
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-red-400 hover:bg-gray-700 hover:text-red-300 transition-colors"
+                      >
+                        Unsend
+                      </button>
+                    )}
+                  </div>,
+                  document.body
+                )}
+              </div>
+            );
+
             return (
               <React.Fragment key={msg.id}>
                 {showDate && (
@@ -448,52 +677,24 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
                   </div>
                 )}
 
-                <div className={`group flex w-full animate-chat-msg ${msg.senderId === user.id ? 'justify-end' : 'justify-start'} ${marginTop}`}>
-                  
-                  {/* Three-Dot Action Menu (Only for outgoing messages) */}
-                  {msg.senderId === user.id && (
-                    <div className="relative mr-2 flex flex-col justify-start pt-1.5">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenuId(activeMenuId === msg.id ? null : msg.id);
-                        }}
-                        className={`p-1.5 rounded-full text-gray-500 hover:text-gray-200 hover:bg-gray-800 transition-all ${
-                          activeMenuId === msg.id ? 'opacity-100 bg-gray-800' : 'opacity-0 group-hover:opacity-100'
-                        }`}
-                        title="Message options"
-                      >
-                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                          <circle cx="5" cy="12" r="2" />
-                          <circle cx="12" cy="12" r="2" />
-                          <circle cx="19" cy="12" r="2" />
-                        </svg>
-                      </button>
-
-                      {/* Dropdown Box */}
-                      {activeMenuId === msg.id && (
-                        <div className="absolute top-10 right-0 w-32 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 z-50 overflow-hidden">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteMessage(msg);
-                              setActiveMenuId(null);
-                            }}
-                            className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-red-400 hover:bg-gray-700 hover:text-red-300 transition-colors"
-                          >
-                            Unsend
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                <div 
+                  ref={(el) => (messageRefs.current[msg.id] = el)}
+                  className={`group flex w-full animate-chat-msg ${isMe ? 'justify-end' : 'justify-start'} ${marginTop}`}
+                >
+                  {isMe && actionMenu}
 
                   <MessageBubble 
                     message={msg} 
-                    isMe={msg.senderId === user.id} 
+                    isMe={isMe} 
                     isGroupStart={isGroupStart}
                     isGroupEnd={isGroupEnd}
+                    isFavorited={isFavorited}
+                    isPhrasebookSaved={isPhrasebookSaved}
+                    isStudyLater={isStudyLater}
+                    onReplyClick={scrollToOriginalMessage}
                   />
+
+                  {!isMe && actionMenu}
                 </div>
               </React.Fragment>
             );
@@ -511,7 +712,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
         </div>
       </div>
 
-      {/* Input Field Area - Background is full width, input bar is centered */}
+      {/* Input Field Area */}
       <div className="flex-none relative z-20 bg-gray-900 border-t border-gray-800 transition-colors duration-300 flex justify-center">
         <div className="w-full max-w-4xl">
           <input 
@@ -532,7 +733,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
                 fileInputRef.current.click();
               }
             }} 
-            isUploading={isUploading} 
+            isUploading={isUploading}
+            replyTarget={replyTarget}
+            onCancelReply={handleCancelReply}
+            currentUserId={user.id}
           />
         </div>
       </div>

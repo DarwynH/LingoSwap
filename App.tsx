@@ -49,7 +49,7 @@ const App: React.FC = () => {
 
 useEffect(() => {
     let callUnsub: () => void;
-    let heartbeatInterval: NodeJS.Timeout; // NEW: Track the heartbeat interval
+    let heartbeatInterval: NodeJS.Timeout;
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -57,12 +57,10 @@ useEffect(() => {
         const userDoc = await getDoc(userRef);
 
         if (userDoc.exists()) {
-          // NEW: Initialize lastSeen on login
           await updateDoc(userRef, { isOnline: true, lastSeen: Date.now() });
           setUser(userDoc.data() as UserProfile);
           setView('main');
 
-          // NEW: Start Heartbeat - Ping Firestore every 60 seconds
           heartbeatInterval = setInterval(() => {
             if (document.visibilityState === 'visible') {
               updateDoc(userRef, { isOnline: true, lastSeen: Date.now() }).catch(e => console.warn(e));
@@ -83,20 +81,17 @@ useEffect(() => {
               setIncomingCall(null);
             }
           });
-        } else {
-          // ... [Keep existing setup logic] ...
         }
       } else {
         setUser(null);
         setView('auth');
-        if (heartbeatInterval) clearInterval(heartbeatInterval); // Clean up on logout
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
       }
     });
 
     const handleVisibility = () => {
       if (!auth.currentUser) return;
       const userRef = doc(db, "users", auth.currentUser.uid);
-      // NEW: Update lastSeen when tabbing in/out
       updateDoc(userRef, { 
         isOnline: document.visibilityState === 'visible',
         lastSeen: Date.now() 
@@ -106,7 +101,6 @@ useEffect(() => {
     const handleUnload = () => {
       if (auth.currentUser) {
         const userRef = doc(db, "users", auth.currentUser.uid);
-        // NEW: Ensure lastSeen is recorded on normal exits
         updateDoc(userRef, { isOnline: false, lastSeen: Date.now() });
       }
     };
@@ -117,7 +111,7 @@ useEffect(() => {
     return () => {
       unsubscribe();
       if (callUnsub) callUnsub();
-      if (heartbeatInterval) clearInterval(heartbeatInterval); // NEW: Clean up heartbeat
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener('beforeunload', handleUnload);
     };
@@ -144,19 +138,16 @@ useEffect(() => {
     setView('chat');
   };
 
-  // FIXED: Now properly creates the Firestore document if making a new call
   const handleStartCall = async (partner: UserProfile, existingCallId?: string, type: 'voice' | 'video' = 'voice') => {
     if (!user) return;
 
     let callIdToUse = existingCallId;
 
-    // If there is no existing call ID, we are the CALLER initiating a new call
     if (!existingCallId) {
       try {
         const callDocRef = doc(collection(db, 'calls'));
         callIdToUse = callDocRef.id;
 
-        // This is the CRITICAL missing step! Tell Firestore the call is ringing.
         await setDoc(callDocRef, {
           callerId: user.id,
           receiverId: partner.id,
@@ -169,11 +160,15 @@ useEffect(() => {
       } catch (error) {
         console.error("Failed to initiate call in Firestore:", error);
         alert("Could not start call. Check your network or adblocker.");
-        return; // Stop here if Firestore write fails
+        return; 
       }
     }
 
-    setActiveSession({ id: `call_${partner.id}`, partner, messages: [] });
+    if (activeSession?.partner.id !== partner.id) {
+      setActiveSession({ id: `call_${partner.id}`, partner, messages: [] });
+    }
+    
+    // FIXED: These state updates must happen unconditionally at the end of the function
     setActiveCallId(callIdToUse || null);
     setActiveCallType(type); 
     setView('call');
@@ -215,7 +210,6 @@ useEffect(() => {
       
       const type = incomingCall.type || 'voice'; 
       setIncomingCall(null);
-      // We pass the existing call ID so it joins instead of creating a new one
       handleStartCall(partner, incomingCall.id, type);
     } catch (error) {
       console.error("Error accepting call:", error);
@@ -243,10 +237,10 @@ useEffect(() => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col max-w-6xl mx-auto bg-white shadow-xl relative overflow-hidden">
+    <div className="fixed inset-0 w-full flex flex-col max-w-6xl mx-auto bg-white shadow-xl overflow-hidden overscroll-none touch-manipulation">
       {/* Incoming Call Overlay */}
       {incomingCall && view !== 'call' && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-[#1a1a1a] text-white p-4 rounded-2xl shadow-2xl flex items-center space-x-4 border border-[#25d366]/30 animate-bounce">
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[100] bg-[#1a1a1a] text-white p-4 rounded-2xl shadow-2xl flex items-center space-x-4 border border-[#25d366]/30 animate-bounce">
           <img src={incomingCall.callerAvatar} alt="caller" className="w-12 h-12 rounded-full border-2 border-[#25d366]" />
           <div>
             <h4 className="font-bold">{incomingCall.callerName}</h4>
@@ -282,7 +276,6 @@ useEffect(() => {
           user={user} 
           session={activeSession} 
           onBack={() => setView('main')} 
-          // FIXED: Pass undefined for the callId so App.tsx knows to create a NEW call
           onCall={(partnerId, type) => handleStartCall(activeSession.partner, undefined, type)}
         />
       )}
@@ -293,7 +286,7 @@ useEffect(() => {
           callId={activeCallId}     
           partner={activeSession.partner} 
           callType={activeCallType} 
-          onClose={() => setView('chat')} 
+          onClose={() => setView(activeSession.id.startsWith('call_') ? 'main' : 'chat')} 
         />
       )}
     </div>

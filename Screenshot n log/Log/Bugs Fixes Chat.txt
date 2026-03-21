@@ -1,0 +1,6 @@
+fixed bug — read receipt visibility on blue outgoing bubble
+fixed bug — mobile random zoom / unstable tap behavior
+fixed bug — mobile keyboard opening now pushes latest chat upward for visibility
+fixed bug — attachment bar can show file or photo/video options
+fixed bug — unsent indicator changed into three-dot action menu UI
+fixed bug _ stale chat after finishing call
