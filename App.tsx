@@ -11,6 +11,7 @@ import CallRoom from './components/CallRoom';
 import ProfileSetup from './components/ProfileSetup';
 import Sidebar, { TabType } from './components/Sidebar';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
+import SavedItemsView from './components/SavedItemsView';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -232,6 +233,7 @@ useEffect(() => {
       case 'dashboard': return <Dashboard user={user} onLogout={handleLogout} onEditProfile={() => setView('setup')} />;
       case 'partners': return <FindPartners user={user} onStartChat={handleStartChat} />;
       case 'chats': return <ChatsList user={user} onSelectChat={handleStartChat} />;
+      case 'saved': return <SavedItemsView user={user} />;
       default: return null;
     }
   };

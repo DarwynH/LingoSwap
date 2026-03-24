@@ -78,6 +78,7 @@ export interface ConversationPreview {
   lastMessage: string;
   timestamp: number;
   unreadCount: number; 
+  note?: string;
 }
 
 // NEW: Types for saved items (Phrasebook & Study Later)
