@@ -1,7 +1,7 @@
-// components/Chat/MessageBubble.tsx
 import React, { useState } from 'react';
 import { ChatMessage } from '../../types';
 import { translateTextToEnglish } from '../../services/translationService'; 
+import MessageTextRenderer from './MessageTextRenderer';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -12,6 +12,7 @@ interface MessageBubbleProps {
   isPhrasebookSaved?: boolean;
   isStudyLater?: boolean;
   onReplyClick?: (messageId: string) => void;
+  onWordClick?: (word: string, messageId: string, text: string) => void;
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({ 
@@ -22,7 +23,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   isFavorited = false,
   isPhrasebookSaved = false,
   isStudyLater = false,
-  onReplyClick
+  onReplyClick,
+  onWordClick
 }) => {
   const [showTranslation, setShowTranslation] = useState(false);
   const [translatedText, setTranslatedText] = useState<string | null>(null);
@@ -129,9 +131,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       )}
 
       {message.text && (
-        <p className="text-[15px] break-words leading-relaxed">
-          {message.text}
-        </p>
+        <MessageTextRenderer 
+          text={message.text} 
+          messageId={message.id} 
+          onWordClick={onWordClick} 
+        />
       )}
       
       {showTranslation && translatedText && (

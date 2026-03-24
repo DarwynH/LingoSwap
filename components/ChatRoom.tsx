@@ -23,6 +23,7 @@ import { UserProfile, ChatMessage, ChatSession, MessageType, SavedItem, SavedIte
 import MessageBubble from './Chat/MessageBubble';
 import Avatar from './ui/Avatar';
 import ChatInput from './Chat/ChatInput';
+import WordActionPopup from './Chat/WordActionPopup';
 import { createPortal } from 'react-dom';
 
 interface ChatRoomProps {
@@ -89,6 +90,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
 
   // Group A (Phrasebook & Study Later) State
   const [savedStates, setSavedStates] = useState<Record<string, { phrasebook: boolean; study_later: boolean }>>({});
+
+  // Word Learning State
+  const [selectedWordContext, setSelectedWordContext] = useState<{
+    word: string;
+    messageId: string;
+    sourceText: string;
+  } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -447,6 +455,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
 
   const handleCancelReply = () => setReplyTarget(null);
 
+  const handleWordClick = (word: string, messageId: string, text: string) => {
+    // Basic regex safe-strip for surrounding accidental punctuation
+    const cleanWord = word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+    if (cleanWord) {
+      setSelectedWordContext({ word: cleanWord, messageId, sourceText: text });
+    }
+  };
+
   const handleToggleFavorite = async (msgId: string, currentlyFavorited: boolean) => {
     const userRef = doc(db, 'users', user.id);
     try {
@@ -479,7 +495,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
           text: msg.text || '', 
           senderId: msg.senderId,
           senderName: msg.senderId === user.id ? user.name : session.partner.name,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          partnerName: session.partner.name,
+          originalTimestamp: msg.timestamp,
         };
         await setDoc(docRef, savedItem);
       }
@@ -692,6 +710,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
                     isPhrasebookSaved={isPhrasebookSaved}
                     isStudyLater={isStudyLater}
                     onReplyClick={scrollToOriginalMessage}
+                    onWordClick={handleWordClick}
                   />
 
                   {!isMe && actionMenu}
@@ -740,6 +759,18 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
           />
         </div>
       </div>
+
+      {/* Word Context Action Popup */}
+      {selectedWordContext && (
+        <WordActionPopup 
+          word={selectedWordContext.word} 
+          messageId={selectedWordContext.messageId}
+          chatId={session.id}
+          sourceText={selectedWordContext.sourceText}
+          userId={user.id}
+          onClose={() => setSelectedWordContext(null)} 
+        />
+      )}
     </div>
   );
 };

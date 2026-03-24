@@ -81,11 +81,11 @@ export interface ConversationPreview {
   note?: string;
 }
 
-// NEW: Types for saved items (Phrasebook & Study Later)
+// Types for saved items (Phrasebook & Study Later)
 export type SavedItemType = 'phrasebook' | 'study_later';
 
 export interface SavedItem {
-  id: string; 
+  id: string;
   userId: string;
   chatId: string;
   messageId: string;
@@ -93,5 +93,59 @@ export interface SavedItem {
   text: string;
   senderId: string;
   senderName: string;
-  timestamp: number;
+  timestamp: number;            // when the item was saved
+
+  // Source-reference fields (for trace-back to original message)
+  partnerName: string;          // chat partner — provides conversation context
+  originalTimestamp: number;    // when the original message was sent
+
+  // User-added metadata
+  note?: string;                // personal note (already used in SavedItemsView)
+  translation?: string;         // cached translation of the message text
+
+  // Future: review / flashcard metadata (not used yet)
+  reviewed?: boolean;
+  reviewCount?: number;
+  lastReviewedAt?: number;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  mastered?: boolean;
 }
+
+// Dictionary and Word Learning Types
+export interface DictionaryMeaning {
+  partOfSpeech?: string;
+  definition: string;
+  example?: string;
+}
+
+export interface DictionaryResult {
+  word: string;
+  translation?: string;
+  phonetic?: string;
+  meanings: DictionaryMeaning[];
+}
+
+export interface SavedVocabularyItem {
+  id: string; // The lowercased word itself
+  userId: string;
+  word: string;
+  translation?: string;
+  phonetic?: string;
+  meanings: DictionaryMeaning[];
+  note?: string;
+
+  // Source Context
+  sourceMessageId: string;
+  sourceChatId: string;
+  sourceText: string;
+
+  // Timestamps
+  createdAt: number;
+  updatedAt: number;
+
+  // Future review metadata
+  reviewCount?: number;
+  lastReviewedAt?: number;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  mastered?: boolean;
+}
