@@ -9,9 +9,10 @@ import VocabDetailPopup from './VocabDetailPopup';
 
 interface SavedItemsViewProps {
   user: UserProfile;
+  onJumpToMessage?: (chatId: string, messageId: string) => void;
 }
 
-const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user }) => {
+const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }) => {
   const [items, setItems] = useState<SavedItem[]>([]);
   const [vocabItems, setVocabItems] = useState<SavedVocabularyItem[]>([]);
   const [activeTab, setActiveTab] = useState<'phrasebook' | 'study_later' | 'vocabulary'>('phrasebook');
@@ -20,6 +21,11 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user }) => {
   const [reviewMode, setReviewMode] = useState(false);
   const [flashcardMode, setFlashcardMode] = useState(false);
   const [selectedVocabItemId, setSelectedVocabItemId] = useState<string | null>(null);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterSender, setFilterSender] = useState<string>('all');
+  const [filterChat, setFilterChat] = useState<string>('all');
+  const [filterReviewed, setFilterReviewed] = useState<string>('all');
 
   useEffect(() => {
     // Fetch all saved message items
@@ -46,7 +52,42 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user }) => {
 
   const phrasebookItems = items.filter(item => item.type === 'phrasebook');
   const studyLaterItems = items.filter(item => item.type === 'study_later');
-  const filteredItems = activeTab === 'phrasebook' ? phrasebookItems : studyLaterItems;
+  
+  const uniqueSenders = Array.from(new Set(items.map(i => i.senderName))).filter(Boolean);
+  const uniqueChats = Array.from(new Set(items.map(i => i.partnerName))).filter(Boolean);
+
+  const applyFilters = (itemList: SavedItem[]) => {
+    return itemList.filter(item => {
+      const matchSearch = !searchQuery || 
+        item.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.translation?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.note?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchSender = filterSender === 'all' || item.senderName === filterSender;
+      const matchChat = filterChat === 'all' || item.partnerName === filterChat;
+
+      return matchSearch && matchSender && matchChat;
+    });
+  };
+
+  const displayedPhrasebookItems = applyFilters(phrasebookItems);
+  const displayedStudyLaterItems = applyFilters(studyLaterItems);
+  const filteredItems = activeTab === 'phrasebook' ? displayedPhrasebookItems : displayedStudyLaterItems;
+
+  const displayedVocabItems = vocabItems.filter(item => {
+    const matchSearch = !searchQuery || 
+      item.word.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.translation?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.meanings?.some(m => m.definition.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      item.note?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+    const isReviewed = item.reviewCount && item.reviewCount > 0;
+    const matchReviewed = filterReviewed === 'all' 
+      || (filterReviewed === 'reviewed' && isReviewed)
+      || (filterReviewed === 'unreviewed' && !isReviewed);
+
+    return matchSearch && matchReviewed;
+  });
 
   const handleRemove = async (id: string) => {
     try {
@@ -91,8 +132,8 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user }) => {
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Review mode items: currently review targets phrasebook items
-  const reviewItems = phrasebookItems;
+  // Review mode items: review targets filtered phrasebook items
+  const reviewItems = displayedPhrasebookItems;
 
   if (flashcardMode) {
     return <FlashcardMode items={reviewItems} userId={user.id} onClose={() => setFlashcardMode(false)} />;
@@ -178,6 +219,83 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user }) => {
             )}
           </button>
         </div>
+
+        {/* Search & Filter Bar */}
+        <div className="mt-4 flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+          <div className="relative flex-1 group">
+            <svg className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${searchQuery ? 'text-gray-300' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            <input
+              type="text"
+              placeholder={activeTab === 'vocabulary' ? "Search vocabulary..." : "Search saved items..."}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={`w-full bg-gray-900 border text-gray-200 text-sm rounded-xl pl-9 pr-10 py-2.5 outline-none transition-colors shadow-sm placeholder-gray-500 focus:ring-1 ${
+                activeTab === 'vocabulary' ? 'border-gray-700 focus:border-blue-500 focus:ring-blue-500' : 
+                activeTab === 'study_later' ? 'border-gray-700 focus:border-purple-500 focus:ring-purple-500' : 
+                'border-gray-700 focus:border-emerald-500 focus:ring-emerald-500'
+              }`}
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-300 bg-gray-800 hover:bg-gray-700 rounded-full transition-colors"
+                title="Clear search"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            )}
+          </div>
+          
+          <div className="flex space-x-3">
+            {activeTab !== 'vocabulary' ? (
+              <>
+                <select 
+                  value={filterSender} 
+                  onChange={(e) => setFilterSender(e.target.value)}
+                  className={`text-[13px] rounded-xl px-3 py-2.5 outline-none cursor-pointer w-full sm:w-auto min-w-[130px] shadow-sm font-medium transition-colors ${
+                    filterSender !== 'all' 
+                      ? (activeTab === 'study_later' ? 'bg-purple-500/10 border border-purple-500/50 text-purple-400 focus:border-purple-500' : 'bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 focus:border-emerald-500')
+                      : `bg-gray-900 border border-gray-700 text-gray-300 ${activeTab === 'study_later' ? 'focus:border-purple-500' : 'focus:border-emerald-500'}`
+                  }`}
+                >
+                  <option value="all">All Senders</option>
+                  {uniqueSenders.map(sender => (
+                    <option key={sender} value={sender}>{sender}</option>
+                  ))}
+                </select>
+
+                <select 
+                  value={filterChat} 
+                  onChange={(e) => setFilterChat(e.target.value)}
+                  className={`text-[13px] rounded-xl px-3 py-2.5 outline-none cursor-pointer w-full sm:w-auto min-w-[130px] shadow-sm font-medium transition-colors ${
+                    filterChat !== 'all' 
+                      ? (activeTab === 'study_later' ? 'bg-purple-500/10 border border-purple-500/50 text-purple-400 focus:border-purple-500' : 'bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 focus:border-emerald-500')
+                      : `bg-gray-900 border border-gray-700 text-gray-300 ${activeTab === 'study_later' ? 'focus:border-purple-500' : 'focus:border-emerald-500'}`
+                  }`}
+                >
+                  <option value="all">All Chats</option>
+                  {uniqueChats.map(chat => (
+                    <option key={chat} value={chat}>{chat}</option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <select 
+                value={filterReviewed} 
+                onChange={(e) => setFilterReviewed(e.target.value)}
+                className={`text-[13px] rounded-xl px-3 py-2.5 outline-none cursor-pointer w-full sm:w-auto min-w-[140px] shadow-sm font-medium transition-colors ${
+                  filterReviewed !== 'all' 
+                    ? 'bg-blue-500/10 border border-blue-500/50 text-blue-400 focus:border-blue-500' 
+                    : 'bg-gray-900 border border-gray-700 text-gray-300 focus:border-blue-500'
+                }`}
+              >
+                <option value="all">All Words</option>
+                <option value="reviewed">Reviewed</option>
+                <option value="unreviewed">Unreviewed</option>
+              </select>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* List Area */}
@@ -185,16 +303,26 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user }) => {
         <div className="max-w-3xl mx-auto space-y-4 pb-20">
           
           {activeTab === 'vocabulary' ? (
-            vocabItems.length === 0 ? (
+            displayedVocabItems.length === 0 ? (
               <div className="text-center py-16 px-4">
                 <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-blue-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                  {searchQuery || filterReviewed !== 'all' ? (
+                    <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  ) : (
+                    <svg className="w-8 h-8 text-blue-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                  )}
                 </div>
-                <h3 className="text-lg font-semibold text-gray-300 mb-2">No vocabulary saved</h3>
-                <p className="text-gray-500 text-sm">Tap on words in your chats to translate and save them for later study.</p>
+                <h3 className="text-lg font-semibold text-gray-300 mb-2">
+                  {searchQuery || filterReviewed !== 'all' ? 'No results found' : 'No vocabulary saved'}
+                </h3>
+                <p className="text-gray-500 text-sm">
+                  {searchQuery || filterReviewed !== 'all' 
+                    ? 'Try adjusting your search or filters.' 
+                    : 'Tap on words in your chats to translate and save them for later study.'}
+                </p>
               </div>
             ) : (
-              vocabItems.map(item => (
+              displayedVocabItems.map(item => (
                 <div 
                   key={item.id} 
                   className="bg-gray-800 border border-gray-700/50 rounded-2xl p-4 shadow-sm transition-all hover:border-gray-600 cursor-pointer group"
@@ -232,7 +360,18 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user }) => {
                   )}
                   
                   <div className="mt-3 flex items-center justify-between text-[11px] text-gray-500">
-                    <span>Saved from chat with {item.sourceChatId ? 'partner' : 'user'}</span>
+                    <div className="flex items-center space-x-2">
+                      <span>Saved from chat with {item.sourceChatId ? 'partner' : 'user'}</span>
+                      {item.sourceChatId && item.sourceMessageId && onJumpToMessage && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); onJumpToMessage(item.sourceChatId, item.sourceMessageId); }}
+                          className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition-colors flex items-center"
+                        >
+                          <svg className="w-3 h-3 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                          View Chat
+                        </button>
+                      )}
+                    </div>
                     <span>{formatDate(item.createdAt)}</span>
                   </div>
                 </div>
@@ -241,19 +380,25 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user }) => {
           ) : filteredItems.length === 0 ? (
             <div className="text-center py-16 px-4">
               <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                {activeTab === 'phrasebook' ? (
+                {searchQuery || filterSender !== 'all' || filterChat !== 'all' ? (
+                  <svg className="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                ) : activeTab === 'phrasebook' ? (
                   <svg className="w-8 h-8 text-emerald-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
                 ) : (
                   <svg className="w-8 h-8 text-purple-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 )}
               </div>
               <h3 className="text-lg font-semibold text-gray-300 mb-2">
-                {activeTab === 'phrasebook' ? 'Your phrasebook is empty' : 'Nothing to study later'}
+                {searchQuery || filterSender !== 'all' || filterChat !== 'all' 
+                  ? 'No results found' 
+                  : activeTab === 'phrasebook' ? 'Your phrasebook is empty' : 'Nothing to study later'}
               </h3>
               <p className="text-gray-500 text-sm">
-                {activeTab === 'phrasebook' 
-                  ? 'Save useful phrases and sentences from your chats to review them here.' 
-                  : 'Mark important messages in your chats to easily find them later.'}
+                {searchQuery || filterSender !== 'all' || filterChat !== 'all'
+                  ? 'Try adjusting your search or filters.'
+                  : activeTab === 'phrasebook' 
+                    ? 'Save useful phrases and sentences from your chats to review them here.' 
+                    : 'Mark important messages in your chats to easily find them later.'}
               </p>
             </div>
           ) : (
@@ -283,6 +428,15 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user }) => {
                           <svg className="w-3 h-3 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
                           Chat with {item.partnerName}
                         </span>
+                      )}
+                      {onJumpToMessage && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); onJumpToMessage(item.chatId, item.messageId); }}
+                          className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition-colors flex items-center ml-2 border-l border-gray-700 pl-2"
+                        >
+                          <svg className="w-3 h-3 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                          View Chat
+                        </button>
                       )}
                     </div>
                   </div>

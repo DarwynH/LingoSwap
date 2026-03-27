@@ -31,6 +31,8 @@ interface ChatRoomProps {
   session: ChatSession;
   onBack: () => void;
   onCall: (partnerId: string, type: 'voice' | 'video') => void;
+  jumpToMessageId?: string | null;
+  onJumpComplete?: () => void;
 }
 
 export interface ReplyTarget {
@@ -69,7 +71,7 @@ const formatDateSeparator = (ts: number) => {
   });
 };
 
-const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) => {
+const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jumpToMessageId, onJumpComplete }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [partnerStatus, setPartnerStatus] = useState<UserProfile | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -116,6 +118,21 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall }) =>
       setTimeout(() => el.classList.remove('bg-gray-800/60', 'rounded-xl'), 1500);
     }
   };
+
+  // Jump-to-message interceptor logic (Scrolls and highlights target message)
+  useEffect(() => {
+    if (jumpToMessageId && messages.length > 0) {
+      const el = messageRefs.current[jumpToMessageId];
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Apply temporary highlight effect matching reply behavior
+        el.classList.add('bg-gray-800/60', 'transition-colors', 'duration-500', 'rounded-xl');
+        setTimeout(() => el.classList.remove('bg-gray-800/60', 'rounded-xl'), 1500);
+
+        if (onJumpComplete) onJumpComplete();
+      }
+    }
+  }, [jumpToMessageId, messages, onJumpComplete]);
 
   // Close the context menu if the user clicks anywhere else
   useEffect(() => {

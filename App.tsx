@@ -1,7 +1,7 @@
 import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import React, { useState, useEffect, useRef } from 'react';
-import { UserProfile, Language, ChatSession, CallData } from './types';
+import { UserProfile, Language, ChatSession, CallData, ChatMessage } from './types';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import FindPartners from './components/FindPartners';
@@ -20,6 +20,7 @@ const App: React.FC = () => {
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [selectedPartner, setSelectedPartner] = useState<UserProfile | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [jumpToMessageId, setJumpToMessageId] = useState<string | null>(null);
   
   const ringtoneRef = useRef<HTMLAudioElement | null>(null);
 
@@ -139,6 +140,47 @@ useEffect(() => {
     setView('chat');
   };
 
+  const handleJumpToMessage = async (chatId: string, messageId: string) => {
+    try {
+      if (!auth.currentUser) return;
+      
+      const msgRef = doc(db, 'chats', chatId, 'messages', messageId);
+      const msgDoc = await getDoc(msgRef);
+      if (!msgDoc.exists()) {
+        alert("Original message could not be found.");
+        return;
+      }
+      
+      const msgData = msgDoc.data() as ChatMessage;
+      let targetPartnerId = msgData.senderId === auth.currentUser.uid ? msgData.receiverId : msgData.senderId;
+
+      if (!targetPartnerId) {
+        const parts = chatId.split('_');
+        if (parts.length === 2) {
+          targetPartnerId = parts[0] === auth.currentUser.uid ? parts[1] : parts[0];
+        }
+      }
+
+      if (!targetPartnerId) {
+        alert("Could not identify the chat partner.");
+        return;
+      }
+
+      const partnerRef = doc(db, 'users', targetPartnerId);
+      const partnerDoc = await getDoc(partnerRef);
+      if (!partnerDoc.exists()) {
+        alert("Chat partner no longer exists.");
+        return;
+      }
+
+      setJumpToMessageId(messageId);
+      handleStartChat(partnerDoc.data() as UserProfile, chatId);
+    } catch (e) {
+      console.error("Jump to message error:", e);
+      alert("An error occurred while trying to jump to the message.");
+    }
+  };
+
   const handleStartCall = async (partner: UserProfile, existingCallId?: string, type: 'voice' | 'video' = 'voice') => {
     if (!user) return;
 
@@ -233,7 +275,7 @@ useEffect(() => {
       case 'dashboard': return <Dashboard user={user} onLogout={handleLogout} onEditProfile={() => setView('setup')} />;
       case 'partners': return <FindPartners user={user} onStartChat={handleStartChat} />;
       case 'chats': return <ChatsList user={user} onSelectChat={handleStartChat} />;
-      case 'saved': return <SavedItemsView user={user} />;
+      case 'saved': return <SavedItemsView user={user} onJumpToMessage={handleJumpToMessage} />;
       default: return null;
     }
   };
@@ -277,8 +319,10 @@ useEffect(() => {
         <ChatRoom 
           user={user} 
           session={activeSession} 
-          onBack={() => setView('main')} 
+          onBack={() => { setView('main'); setJumpToMessageId(null); }} 
           onCall={(partnerId, type) => handleStartCall(activeSession.partner, undefined, type)}
+          jumpToMessageId={jumpToMessageId}
+          onJumpComplete={() => setJumpToMessageId(null)}
         />
       )}
 
