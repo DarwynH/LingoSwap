@@ -33,7 +33,7 @@ const FlashcardMode: React.FC<FlashcardModeProps> = ({ items, userId, onClose })
 
   const flipCard = () => setFlipped(!flipped);
 
-  const markReviewed = async () => {
+  const markReviewed = async (difficulty: 'easy' | 'medium' | 'hard') => {
     if (!item || markedIds.has(item.id)) return;
 
     try {
@@ -42,6 +42,7 @@ const FlashcardMode: React.FC<FlashcardModeProps> = ({ items, userId, onClose })
         reviewed: true,
         reviewCount: increment(1),
         lastReviewedAt: Date.now(),
+        difficulty,
       });
       setMarkedIds(prev => new Set(prev).add(item.id));
     } catch (e) {
@@ -198,21 +199,36 @@ const FlashcardMode: React.FC<FlashcardModeProps> = ({ items, userId, onClose })
           </div>
 
           {/* Mark Reviewed */}
-          <div className="flex justify-center mt-4">
-            <button
-              onClick={(e) => { e.stopPropagation(); markReviewed(); }}
-              disabled={isMarked}
-              className={`flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 ${
-                isMarked
-                  ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-700/30 cursor-default'
-                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700 hover:text-emerald-400 border border-gray-700/50'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-              </svg>
-              <span>{isMarked ? 'Reviewed' : 'Mark Reviewed'}</span>
-            </button>
+          <div className="flex flex-col items-center justify-center mt-4">
+            {isMarked ? (
+              <div className="flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-900/30 text-emerald-400 border border-emerald-700/30 cursor-default">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+                <span>Reviewed</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2 w-full px-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); markReviewed('hard'); }}
+                  className="flex-1 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30"
+                >
+                  Hard
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); markReviewed('medium'); }}
+                  className="flex-1 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30"
+                >
+                  Good
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); markReviewed('easy'); }}
+                  className="flex-1 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30"
+                >
+                  Easy
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

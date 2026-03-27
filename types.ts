@@ -144,6 +144,7 @@ export interface SavedVocabularyItem {
   updatedAt: number;
 
   // Future review metadata
+  reviewed?: boolean;
   reviewCount?: number;
   lastReviewedAt?: number;
   difficulty?: 'easy' | 'medium' | 'hard';

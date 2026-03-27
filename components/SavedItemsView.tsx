@@ -6,6 +6,7 @@ import { UserProfile, SavedItem, SavedVocabularyItem } from '../types';
 import ReviewMode from './ReviewMode';
 import FlashcardMode from './FlashcardMode';
 import VocabDetailPopup from './VocabDetailPopup';
+import { getSuggestedItems } from '../utils/reviewLogic';
 
 interface SavedItemsViewProps {
   user: UserProfile;
@@ -15,7 +16,7 @@ interface SavedItemsViewProps {
 const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }) => {
   const [items, setItems] = useState<SavedItem[]>([]);
   const [vocabItems, setVocabItems] = useState<SavedVocabularyItem[]>([]);
-  const [activeTab, setActiveTab] = useState<'phrasebook' | 'study_later' | 'vocabulary'>('phrasebook');
+  const [activeTab, setActiveTab] = useState<'review_today' | 'phrasebook' | 'study_later' | 'vocabulary'>('review_today');
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [reviewMode, setReviewMode] = useState(false);
@@ -72,9 +73,10 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }
 
   const displayedPhrasebookItems = applyFilters(phrasebookItems);
   const displayedStudyLaterItems = applyFilters(studyLaterItems);
+  
   const filteredItems = activeTab === 'phrasebook' ? displayedPhrasebookItems : displayedStudyLaterItems;
 
-  const displayedVocabItems = vocabItems.filter(item => {
+  const displayedVocabItemsRaw = vocabItems.filter(item => {
     const matchSearch = !searchQuery || 
       item.word.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.translation?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -88,6 +90,13 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }
 
     return matchSearch && matchReviewed;
   });
+
+  const displayedVocabItems = displayedVocabItemsRaw;
+
+  // Review Today Logic
+  const isVocab = (item: SavedItem | SavedVocabularyItem): item is SavedVocabularyItem => 'word' in item;
+  const allReviewableItems = [...phrasebookItems, ...vocabItems];
+  const reviewTodayItems = activeTab === 'review_today' ? getSuggestedItems(allReviewableItems, 15) : [];
 
   const handleRemove = async (id: string) => {
     try {
@@ -132,8 +141,10 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // Review mode items: review targets filtered phrasebook items
-  const reviewItems = displayedPhrasebookItems;
+  // Review mode items: review targets filtered phrasebook items, or suggested phrases if on default tab
+  const reviewItems = activeTab === 'review_today' 
+    ? reviewTodayItems.filter(i => !isVocab(i)) as SavedItem[] 
+    : displayedPhrasebookItems;
 
   if (flashcardMode) {
     return <FlashcardMode items={reviewItems} userId={user.id} onClose={() => setFlashcardMode(false)} />;
@@ -149,7 +160,7 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }
       <div className="flex-none bg-gray-900/80 backdrop-blur-xl border-b border-gray-800 p-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="flex items-center justify-between mb-4 px-2">
           <h2 className="text-xl font-bold">Saved Items</h2>
-          {phrasebookItems.length > 0 && (
+          {reviewItems.length > 0 && activeTab !== 'study_later' && activeTab !== 'vocabulary' && (
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setReviewMode(true)}
@@ -172,10 +183,22 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }
             </div>
           )}
         </div>
-        <div className="flex space-x-2 bg-gray-800 p-1 rounded-xl">
+        <div className="flex space-x-2 bg-gray-800 p-1 rounded-xl overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('review_today')}
+            className={`flex-1 min-w-[120px] py-2 text-sm font-semibold rounded-lg transition-colors flex items-center justify-center space-x-1.5 ${
+              activeTab === 'review_today' ? 'bg-gray-700 text-amber-400 shadow-sm' : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            <span>Review Today</span>
+            {activeTab !== 'review_today' && (
+              <div className="w-2 h-2 rounded-full bg-amber-500/80 animate-pulse ml-1"></div>
+            )}
+          </button>
           <button
             onClick={() => setActiveTab('phrasebook')}
-            className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors flex items-center justify-center space-x-1.5 ${
+            className={`flex-1 min-w-[110px] py-2 text-sm font-semibold rounded-lg transition-colors flex items-center justify-center space-x-1.5 ${
               activeTab === 'phrasebook' ? 'bg-gray-700 text-emerald-400 shadow-sm' : 'text-gray-400 hover:text-gray-200'
             }`}
           >
@@ -220,10 +243,11 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }
           </button>
         </div>
 
-        {/* Search & Filter Bar */}
-        <div className="mt-4 flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
-          <div className="relative flex-1 group">
-            <svg className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${searchQuery ? 'text-gray-300' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        {/* Search & Filter Bar (hidden in Review Today) */}
+        {activeTab !== 'review_today' && (
+          <div className="mt-4 flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
+            <div className="relative flex-1 group">
+              <svg className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${searchQuery ? 'text-gray-300' : 'text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             <input
               type="text"
               placeholder={activeTab === 'vocabulary' ? "Search vocabulary..." : "Search saved items..."}
@@ -296,13 +320,91 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }
             )}
           </div>
         </div>
+        )}
       </div>
 
       {/* List Area */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="max-w-3xl mx-auto space-y-4 pb-20">
           
-          {activeTab === 'vocabulary' ? (
+          {activeTab === 'review_today' ? (
+            reviewTodayItems.length === 0 ? (
+              <div className="text-center py-16 px-4">
+                <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-amber-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                </div>
+                <h3 className="text-lg font-semibold text-gray-300 mb-2">You are all caught up!</h3>
+                <p className="text-gray-500 text-sm">There are no pending high-priority items to review right now.</p>
+              </div>
+            ) : (
+              reviewTodayItems.map(item => (
+                <div key={item.id} className="bg-gray-800 border border-amber-500/20 rounded-2xl p-4 shadow-sm transition-all hover:border-amber-500/50 relative overflow-hidden flex flex-col group cursor-pointer"
+                  onClick={() => {
+                    if (isVocab(item)) { setSelectedVocabItemId(item.id); }
+                  }}
+                >
+                  {/* Type Badge */}
+                  <div className="absolute top-0 right-0 px-3 py-1 bg-gray-900/80 rounded-bl-xl border-l border-b border-gray-700/50 flex items-center space-x-1.5">
+                    {item.lastReviewedAt && (Date.now() - item.lastReviewedAt) / (1000 * 60 * 60 * 24) > 30 && (
+                      <span className="text-[9px] font-bold text-red-400 bg-red-500/10 border border-red-500/30 px-1.5 py-0.5 rounded uppercase tracking-wider animate-pulse">
+                        Forgotten?
+                      </span>
+                    )}
+                    {item.difficulty && (
+                      <span className={`text-[9px] font-bold uppercase ${
+                        item.difficulty === 'hard' ? 'text-red-400' :
+                        item.difficulty === 'medium' ? 'text-blue-400' :
+                        'text-emerald-400'
+                      }`}>
+                        {item.difficulty}
+                      </span>
+                    )}
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                      {isVocab(item) ? 'Vocab' : 'Phrase'}
+                    </span>
+                  </div>
+
+                  <div className="pr-20 mb-3">
+                    <h4 className="text-xl font-bold text-gray-100 uppercase tracking-wide">
+                      {isVocab(item) ? item.word : item.text}
+                    </h4>
+                    {isVocab(item) && item.phonetic && <span className="text-sm font-mono text-gray-400 ml-2">{item.phonetic}</span>}
+                  </div>
+
+                  <div className="mb-4 flex-1">
+                    <p className="text-[14px] text-gray-300">
+                      {isVocab(item) ? (item.meanings?.[0]?.definition || item.translation) : item.translation}
+                    </p>
+                  </div>
+
+                  <div className="mt-auto pt-3 border-t border-gray-700/50 flex items-center justify-between text-[11px] text-gray-500">
+                    <div className="flex items-center space-x-2">
+                      {item.reviewCount ? (
+                        <span className="text-emerald-500/80 font-semibold border-r border-gray-700 pr-2">
+                          Reviews: {item.reviewCount}
+                        </span>
+                      ) : (
+                        <span className="text-amber-500/80 font-semibold border-r border-gray-700 pr-2">
+                          Never reviewed
+                        </span>
+                      )}
+                      {item.lastReviewedAt && (
+                        <span>Last: {formatDate(item.lastReviewedAt)}</span>
+                      )}
+                    </div>
+                    {isVocab(item) && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setSelectedVocabItemId(item.id); }}
+                        className="text-amber-400 hover:text-amber-300 font-bold px-3 py-1.5 bg-amber-500/10 rounded transition-colors"
+                      >
+                        Study
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )
+          ) : activeTab === 'vocabulary' ? (
             displayedVocabItems.length === 0 ? (
               <div className="text-center py-16 px-4">
                 <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -362,10 +464,24 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }
                   <div className="mt-3 flex items-center justify-between text-[11px] text-gray-500">
                     <div className="flex items-center space-x-2">
                       <span>Saved from chat with {item.sourceChatId ? 'partner' : 'user'}</span>
+                      {item.difficulty && (
+                        <span className={`text-[10px] font-bold uppercase border-l border-gray-700 pl-2 ${
+                          item.difficulty === 'hard' ? 'text-red-400' :
+                          item.difficulty === 'medium' ? 'text-blue-400' :
+                          'text-emerald-400'
+                        }`}>
+                          {item.difficulty}
+                        </span>
+                      )}
+                      {item.reviewCount && item.reviewCount > 0 ? (
+                        <span className="text-emerald-500/80 font-semibold border-l border-gray-700 pl-2">
+                          ✓ Reviewed ({item.reviewCount})
+                        </span>
+                      ) : null}
                       {item.sourceChatId && item.sourceMessageId && onJumpToMessage && (
                         <button 
                           onClick={(e) => { e.stopPropagation(); onJumpToMessage(item.sourceChatId, item.sourceMessageId); }}
-                          className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition-colors flex items-center"
+                          className="text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition-colors flex items-center ml-2 border-l border-gray-700 pl-2"
                         >
                           <svg className="w-3 h-3 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                           View Chat
@@ -429,6 +545,22 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }
                           Chat with {item.partnerName}
                         </span>
                       )}
+                      {item.difficulty && (
+                        <span className={`text-[10px] font-bold uppercase flex items-center ${
+                          item.difficulty === 'hard' ? 'text-red-400' :
+                          item.difficulty === 'medium' ? 'text-blue-400' :
+                          'text-emerald-400'
+                        }`}>
+                          <span className="w-1 h-1 rounded-full bg-gray-600 mx-2"></span>
+                          {item.difficulty}
+                        </span>
+                      )}
+                      {item.reviewCount ? (
+                        <span className="text-[11px] text-emerald-500/80 font-semibold flex items-center">
+                          <span className="w-1 h-1 rounded-full bg-gray-600 mx-2"></span>
+                          ✓ Reviewed ({item.reviewCount})
+                        </span>
+                      ) : null}
                       {onJumpToMessage && (
                         <button 
                           onClick={(e) => { e.stopPropagation(); onJumpToMessage(item.chatId, item.messageId); }}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, updateDoc, deleteDoc, increment } from 'firebase/firestore';
 import { SavedVocabularyItem } from '../types';
 
 interface VocabDetailPopupProps {
@@ -42,6 +42,20 @@ const VocabDetailPopup: React.FC<VocabDetailPopupProps> = ({ item, onClose }) =>
       } catch (err) {
         console.error('Failed to remove vocabulary item:', err);
       }
+    }
+  };
+
+  const handleMarkReviewed = async (difficulty: 'easy' | 'medium' | 'hard') => {
+    if (!item.userId || !item.id) return;
+    try {
+      await updateDoc(doc(db, 'users', item.userId, 'vocabulary', item.id), {
+        reviewed: true,
+        reviewCount: increment(1),
+        lastReviewedAt: Date.now(),
+        difficulty
+      });
+    } catch (err) {
+      console.error('Failed to mark reviewed:', err);
     }
   };
 
@@ -149,6 +163,46 @@ const VocabDetailPopup: React.FC<VocabDetailPopupProps> = ({ item, onClose }) =>
                   Add a hint or memory hook
                 </button>
               )}
+            </div>
+
+            {/* Review Progress Section */}
+            <div className="pt-2">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-3 flex items-center">
+                <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                Study Progress
+              </span>
+              <div className="bg-gray-800/30 border border-gray-700/50 rounded-xl p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-[13px] text-gray-300 font-medium">
+                    {item.reviewCount ? `Reviewed ${item.reviewCount} time${item.reviewCount > 1 ? 's' : ''}` : 'Not reviewed yet'}
+                  </p>
+                  {item.lastReviewedAt && (
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      Last review: {new Date(item.lastReviewedAt).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center space-x-1.5 shrink-0">
+                  <button
+                    onClick={() => handleMarkReviewed('hard')}
+                    className="px-2.5 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/30 rounded text-[11px] font-bold transition-colors active:scale-95"
+                  >
+                    Hard
+                  </button>
+                  <button
+                    onClick={() => handleMarkReviewed('medium')}
+                    className="px-2.5 py-1.5 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 rounded text-[11px] font-bold transition-colors active:scale-95"
+                  >
+                    Good
+                  </button>
+                  <button
+                    onClick={() => handleMarkReviewed('easy')}
+                    className="px-2.5 py-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/30 rounded text-[11px] font-bold transition-colors active:scale-95"
+                  >
+                    Easy
+                  </button>
+                </div>
+              </div>
             </div>
 
           </div>
