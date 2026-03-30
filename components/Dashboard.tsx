@@ -53,10 +53,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#f8fafb]">
-      <header className="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
+    <div className="flex-1 flex flex-col h-full bg-[#0f172a]"> {/* Deep Slate Background */}
+      <header className="bg-[#1e293b] border-b border-slate-700 p-4 flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold text-gray-800">Your Progress</h1>
+          <h1 className="text-xl font-bold text-white">Your Progress</h1>
           <p className="text-xs text-gray-500">Welcome back, {user.name}!</p>
         </div>
         <div className="flex items-center space-x-3">
@@ -76,18 +76,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
       </header>
 
       <div className="p-6 space-y-6 overflow-y-auto">
-        {/* Main Stat Card */}
-        <div className="bg-[#00a884] rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
+        {/* Main Stat Card - Midnight Blue Theme */}
+        <div className="bg-[#162b58] rounded-3xl p-8 text-white shadow-xl relative overflow-hidden transition-transform hover:scale-[1.01]">
           <div className="relative z-10">
-            <p className="text-[#e7f7f3] text-sm font-medium uppercase tracking-widest mb-2">Practice Time</p>
+            <p className="text-blue-100 text-sm font-semibold uppercase tracking-widest mb-2 opacity-80">
+              Practice Time
+            </p>
             <div className="flex items-baseline space-x-2">
-              <h2 className="text-6xl font-black">{totalHours}</h2>
-              <span className="text-2xl font-bold opacity-80">Hours</span>
+              <h2 className="text-6xl font-black tracking-tight">{totalHours}</h2>
+              <span className="text-2xl font-bold text-blue-100">Hours</span>
             </div>
-            <p className="mt-4 text-sm opacity-90">You've spent {totalHours} hours practicing {user.targetLanguage} this week. Keep it up!</p>
+            <p className="mt-4 text-sm text-blue-50 font-medium max-w-xs leading-relaxed">
+              You've spent {totalHours} hours practicing {user.targetLanguage} this week.
+              <span className="block mt-1 opacity-75">Keep pushing toward your goal!</span>
+            </p>
           </div>
-          <div className="absolute top-0 right-0 p-8 opacity-20">
-            <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 24 24">
+
+          {/* Background Icon - Updated for subtle contrast */}
+          <div className="absolute top-0 right-0 p-8 text-white opacity-10 rotate-12">
+            <svg className="w-36 h-36" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
@@ -95,42 +102,57 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
 
         {/* Small Stat Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-[#1b2b3f] p-6 rounded-2xl shadow-sm border border-[#1b2b3f]">
             <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Current Streak</p>
             <div className="flex items-center space-x-2">
               <span className="text-2xl font-bold text-orange-500">{stats.streak} Days</span>
               <span className="text-xl">🔥</span>
             </div>
           </div>
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div className="bg-[#1b2b3f] p-6 rounded-2xl shadow-sm border border-[#1b2b3f]">
             <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Sessions</p>
             <div className="flex items-center space-x-2">
               <span className="text-2xl font-bold text-blue-500">{stats.sessionsCount}</span>
               <span className="text-xl">💬</span>
             </div>
           </div>
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 col-span-2 md:col-span-1">
-            <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Target</p>
-            <div className="flex items-center space-x-2">
-              <span className="text-2xl font-bold text-gray-800">{user.targetLanguage}</span>
-              <span className="text-xl">🎯</span>
-            </div>
-          </div>
         </div>
 
         {/* Daily Activity (Bar Chart) */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-          <h3 className="font-bold text-gray-800 mb-4">Daily Activity</h3>
-          <div className="flex items-end justify-between h-32 px-2">
-            {[45, 60, 30, 90, 40, 20, 10].map((h, i) => (
-              <div key={i} className="flex flex-col items-center w-8">
-                <div
-                  className={`w-full rounded-t-lg transition-all duration-500 ${i === 3 ? 'bg-[#00a884]' : 'bg-[#e7f7f3]'}`}
-                  style={{ height: `${h}%` }}
-                ></div>
-                <span className="text-[10px] text-gray-400 mt-2">Day {i + 1}</span>
-              </div>
-            ))}
+        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 transition-all hover:shadow-md">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="font-bold text-gray-800">Weekly Activity</h3>
+            <span className="text-[10px] font-bold text-[#162b58] bg-[#f0f0f0] px-2 py-1 rounded-full uppercase tracking-wider">
+              Live Tracking
+            </span>
+          </div>
+
+          <div className="flex items-end justify-between h-44 px-2 gap-3">
+            {/* This now uses your real user data */}
+            {(user.dailyStats || [0, 0, 0, 0, 0, 0, 0]).map((minutes, i) => {
+              const heightPercentage = Math.max((minutes / 60) * 100, 4);
+              const isToday = i === new Date().getDay();
+
+              return (
+                <div key={i} className="flex flex-col items-center flex-1 h-full justify-end group relative">
+                  <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800 text-white text-[10px] px-2 py-1 rounded pointer-events-none">
+                    {Math.round(minutes)}m
+                  </div>
+
+                  <div
+                    className={`w-full rounded-t-lg transition-all duration-700 ease-out shadow-sm ${isToday
+                      ? 'bg-gradient-to-t from-[#162b58] to-[#a0adc8] scale-105'
+                      : 'bg-[#d8dce3] hover:bg-[#a0adc8]'
+                      }`}
+                    style={{ height: `${heightPercentage}%` }}
+                  ></div>
+
+                  <span className={`text-[10px] mt-3 font-bold ${isToday ? 'text-[##162b58]' : 'text-gray-400'}`}>
+                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'][i]}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
