@@ -1,5 +1,5 @@
 import { db, auth } from './firebase';
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, Language, ChatSession, CallData, ChatMessage } from './types';
 import Auth from './components/Auth';
@@ -12,6 +12,8 @@ import ProfileSetup from './components/ProfileSetup';
 import Sidebar, { TabType } from './components/Sidebar';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 import SavedItemsView from './components/SavedItemsView';
+import { useMediaQuery } from './hooks/useMediaQuery';
+import { playMessageNotification } from './utils/notificationSound';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -21,8 +23,15 @@ const App: React.FC = () => {
   const [selectedPartner, setSelectedPartner] = useState<UserProfile | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [jumpToMessageId, setJumpToMessageId] = useState<string | null>(null);
+
+  // Desktop: ≥768px — keeps sidebar visible alongside chat
+  const isDesktop = useMediaQuery('(min-width: 768px)');
   
   const ringtoneRef = useRef<HTMLAudioElement | null>(null);
+
+  // Notification sound tracking refs
+  const prevUnreadTotalRef = useRef<number | null>(null);
+  const notifInitializedRef = useRef(false);
 
   const [incomingCall, setIncomingCall] = useState<CallData | null>(null);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
@@ -119,6 +128,75 @@ useEffect(() => {
     };
   }, []);
 
+  // ── Global notification sound listener ──
+  // Watches the user's conversations subcollection for unread count changes.
+  // Plays a sound when total unread increases (new incoming message).
+  // Uses a ref for `view` to avoid re-subscribing the Firestore listener on view changes.
+  const viewRef = useRef(view);
+  useEffect(() => { viewRef.current = view; }, [view]);
+
+  useEffect(() => {
+    if (!user) {
+      // Reset tracking on logout
+      prevUnreadTotalRef.current = null;
+      notifInitializedRef.current = false;
+      return;
+    }
+
+    const convQuery = query(
+      collection(db, 'users', user.id, 'conversations'),
+      orderBy('timestamp', 'desc')
+    );
+
+    const unsub = onSnapshot(convQuery, async (snapshot) => {
+      // Sum up unread counts, but exclude muted conversations
+      // Also check blocked users to suppress their notifications
+      let totalUnmutedUnread = 0;
+
+      // Load blocked user IDs once per snapshot for efficiency
+      let blockedIds: Set<string> = new Set();
+      try {
+        const blockedSnap = await getDocs(collection(db, 'users', user.id, 'blockedUsers'));
+        blockedSnap.docs.forEach((d) => blockedIds.add(d.id));
+      } catch {
+        // If blocked collection doesn't exist yet, just proceed
+      }
+
+      snapshot.docs.forEach((d) => {
+        const data = d.data();
+        const unread = data.unreadCount || 0;
+        const isMuted = data.muted === true;
+        const partnerId = data.partnerId || d.id;
+        const isBlockedUser = blockedIds.has(partnerId);
+
+        // Only count unread from non-muted, non-blocked conversations
+        if (!isMuted && !isBlockedUser) {
+          totalUnmutedUnread += unread;
+        }
+      });
+
+      if (!notifInitializedRef.current) {
+        // First snapshot after mount/login — record baseline, don't play sound
+        prevUnreadTotalRef.current = totalUnmutedUnread;
+        notifInitializedRef.current = true;
+        return;
+      }
+
+      const prevTotal = prevUnreadTotalRef.current ?? 0;
+
+      if (totalUnmutedUnread > prevTotal) {
+        // New incoming message detected from a non-muted, non-blocked conversation
+        if (viewRef.current !== 'call') {
+          playMessageNotification();
+        }
+      }
+
+      prevUnreadTotalRef.current = totalUnmutedUnread;
+    });
+
+    return () => unsub();
+  }, [user]);
+
   const handleProfileSave = async (updatedProfile: UserProfile) => {
     if (!auth.currentUser) return;
     try {
@@ -137,7 +215,9 @@ useEffect(() => {
     setActiveSession(session);
     setSelectedPartner(partner);
     setActiveChatId(chatId);
-    setView('chat');
+    // On desktop, keep 'main' view so sidebar stays visible
+    // On mobile, switch to full-screen 'chat' view as before
+    setView(isDesktop ? 'main' : 'chat');
   };
 
   const handleJumpToMessage = async (chatId: string, messageId: string) => {
@@ -308,18 +388,50 @@ useEffect(() => {
       
       {view === 'main' && user && (
         <div className="flex flex-1 overflow-hidden h-full">
-          <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+          <Sidebar activeTab={activeTab} onTabChange={(tab) => {
+            setActiveTab(tab);
+            // On desktop, close the embedded chat when switching tabs
+            if (isDesktop && activeSession) {
+              setActiveSession(null);
+              setActiveChatId(null);
+              setJumpToMessageId(null);
+            }
+          }} />
           <main className="flex-1 flex flex-col overflow-hidden">
-            {renderMainContent()}
+            {/* Desktop: show embedded chat beside sidebar when a session is active */}
+            {isDesktop && activeSession ? (
+              <ChatRoom
+                user={user}
+                session={activeSession}
+                isEmbedded
+                onBack={() => {
+                  setActiveSession(null);
+                  setActiveChatId(null);
+                  setJumpToMessageId(null);
+                }}
+                onDeleteChat={() => {
+                  setActiveSession(null);
+                  setActiveChatId(null);
+                  setJumpToMessageId(null);
+                }}
+                onCall={(partnerId, type) => handleStartCall(activeSession.partner, undefined, type)}
+                jumpToMessageId={jumpToMessageId}
+                onJumpComplete={() => setJumpToMessageId(null)}
+              />
+            ) : (
+              renderMainContent()
+            )}
           </main>
         </div>
       )}
 
-      {view === 'chat' && activeSession && user && (
+      {/* Mobile only: full-screen chat view */}
+      {view === 'chat' && !isDesktop && activeSession && user && (
         <ChatRoom 
           user={user} 
           session={activeSession} 
-          onBack={() => { setView('main'); setJumpToMessageId(null); }} 
+          onBack={() => { setView('main'); setActiveSession(null); setActiveChatId(null); setJumpToMessageId(null); }}
+          onDeleteChat={() => { setView('main'); setActiveSession(null); setActiveChatId(null); setJumpToMessageId(null); }}
           onCall={(partnerId, type) => handleStartCall(activeSession.partner, undefined, type)}
           jumpToMessageId={jumpToMessageId}
           onJumpComplete={() => setJumpToMessageId(null)}
@@ -332,7 +444,7 @@ useEffect(() => {
           callId={activeCallId}     
           partner={activeSession.partner} 
           callType={activeCallType} 
-          onClose={() => setView(activeSession.id.startsWith('call_') ? 'main' : 'chat')} 
+          onClose={() => setView(activeSession.id.startsWith('call_') ? 'main' : (isDesktop ? 'main' : 'chat'))} 
         />
       )}
     </div>

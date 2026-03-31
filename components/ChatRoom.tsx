@@ -15,7 +15,7 @@ import {
   updateDoc,
   arrayUnion,
   arrayRemove,
-  where // Imported where for savedItems query
+  where
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import React, { useState, useRef, useEffect } from 'react';
@@ -24,6 +24,8 @@ import MessageBubble from './Chat/MessageBubble';
 import Avatar from './ui/Avatar';
 import ChatInput from './Chat/ChatInput';
 import WordActionPopup from './Chat/WordActionPopup';
+import ChatHeaderMenu from './Chat/ChatHeaderMenu';
+import ChatSearchBar from './Chat/ChatSearchBar';
 import { createPortal } from 'react-dom';
 
 interface ChatRoomProps {
@@ -33,6 +35,10 @@ interface ChatRoomProps {
   onCall: (partnerId: string, type: 'voice' | 'video') => void;
   jumpToMessageId?: string | null;
   onJumpComplete?: () => void;
+  /** When true, renders inline (no fixed positioning) for desktop side-by-side layout */
+  isEmbedded?: boolean;
+  /** Called after the user deletes the chat, so App can clean up session state */
+  onDeleteChat?: () => void;
 }
 
 export interface ReplyTarget {
@@ -71,7 +77,7 @@ const formatDateSeparator = (ts: number) => {
   });
 };
 
-const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jumpToMessageId, onJumpComplete }) => {
+const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jumpToMessageId, onJumpComplete, isEmbedded = false, onDeleteChat }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [partnerStatus, setPartnerStatus] = useState<UserProfile | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -99,6 +105,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
     messageId: string;
     sourceText: string;
   } | null>(null);
+
+  // Header menu & search state
+  const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const headerMenuBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Mute / Block state
+  const [isMuted, setIsMuted] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -133,6 +148,34 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       }
     }
   }, [jumpToMessageId, messages, onJumpComplete]);
+
+  // Reset search & menu state when switching chats
+  useEffect(() => {
+    setIsSearchOpen(false);
+    setIsHeaderMenuOpen(false);
+  }, [session.id]);
+
+  // Listen to mute state from the conversation document
+  useEffect(() => {
+    const convRef = doc(db, 'users', user.id, 'conversations', session.partner.id);
+    const unsub = onSnapshot(convRef, (snap) => {
+      if (snap.exists()) {
+        setIsMuted(snap.data().muted === true);
+      } else {
+        setIsMuted(false);
+      }
+    });
+    return () => unsub();
+  }, [user.id, session.partner.id]);
+
+  // Listen to block state
+  useEffect(() => {
+    const blockRef = doc(db, 'users', user.id, 'blockedUsers', session.partner.id);
+    const unsub = onSnapshot(blockRef, (snap) => {
+      setIsBlocked(snap.exists());
+    });
+    return () => unsub();
+  }, [user.id, session.partner.id]);
 
   // Close the context menu if the user clicks anywhere else
   useEffect(() => {
@@ -237,7 +280,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
   }, [session.id, user.id, session.partner.id]);
 
   // Actively pin the scroll position to the bottom when the keyboard resizes
+  // Only needed for mobile full-screen mode (not embedded desktop)
   useEffect(() => {
+    if (isEmbedded) return;
+
     const handleViewportChange = () => {
       if (!window.visualViewport) return;
       
@@ -261,7 +307,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       window.visualViewport?.removeEventListener('resize', handleViewportChange);
       window.visualViewport?.removeEventListener('scroll', handleViewportChange);
     };
-  }, []);
+  }, [isEmbedded]);
 
   // Clear ghost notification badges
   useEffect(() => {
@@ -277,7 +323,64 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
     clearGhostBadge();
   }, [user.id, session.partner.id]);
 
+  // ── Chat-level actions (Delete / Mute / Block) ──
+
+  const handleDeleteConversation = async () => {
+    if (!window.confirm('Delete this conversation? It will be removed from your chat list. The other user may still see the conversation.')) return;
+    try {
+      const convRef = doc(db, 'users', user.id, 'conversations', session.partner.id);
+      await deleteDoc(convRef);
+      if (onDeleteChat) {
+        onDeleteChat();
+      } else {
+        onBack();
+      }
+    } catch (error) {
+      console.error('Failed to delete conversation:', error);
+      alert('Could not delete conversation.');
+    }
+  };
+
+  const handleToggleMute = async () => {
+    try {
+      const convRef = doc(db, 'users', user.id, 'conversations', session.partner.id);
+      await setDoc(convRef, { muted: !isMuted }, { merge: true });
+    } catch (error) {
+      console.error('Failed to toggle mute:', error);
+      alert('Could not update mute setting.');
+    }
+  };
+
+  const handleToggleBlock = async () => {
+    const blockRef = doc(db, 'users', user.id, 'blockedUsers', session.partner.id);
+    if (isBlocked) {
+      if (!window.confirm(`Unblock ${session.partner.name}? You will be able to send messages again.`)) return;
+      try {
+        await deleteDoc(blockRef);
+      } catch (error) {
+        console.error('Failed to unblock:', error);
+        alert('Could not unblock user.');
+      }
+    } else {
+      if (!window.confirm(`Block ${session.partner.name}? You will not be able to send messages to this user.`)) return;
+      try {
+        await setDoc(blockRef, {
+          blockedAt: Date.now(),
+          partnerId: session.partner.id,
+          partnerName: session.partner.name,
+        });
+      } catch (error) {
+        console.error('Failed to block:', error);
+        alert('Could not block user.');
+      }
+    }
+  };
+
   const sendMessageToFirestore = async (text: string, type: MessageType = 'text', fileData?: any) => {
+    if (isBlocked) {
+      alert(`You have blocked ${session.partner.name}. Unblock to send messages.`);
+      return;
+    }
     const now = Date.now();
     const batch = writeBatch(db);
 
@@ -350,6 +453,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (isBlocked) {
+      alert(`You have blocked ${session.partner.name}. Unblock to send files.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     if (file.size > MAX_FILE_SIZE) {
       alert('File is too large.');
       return;
@@ -390,6 +499,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
   };
 
   const handleVoiceUpload = async (audioBlob: Blob, duration: number) => {
+    if (isBlocked) {
+      alert(`You have blocked ${session.partner.name}. Unblock to send voice messages.`);
+      return;
+    }
     setIsUploading(true);
     setUploadProgress(0);
 
@@ -525,7 +638,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
   };
 
   return (
-    <div ref={chatContainerRef} className="flex flex-col overflow-hidden bg-gray-900 overscroll-none fixed inset-0 w-full max-w-6xl mx-auto z-50">
+    <div ref={chatContainerRef} className={`flex flex-col overflow-hidden bg-gray-900 overscroll-none ${isEmbedded ? 'relative w-full h-full' : 'fixed inset-0 w-full max-w-6xl mx-auto z-50'}`}>
       <style>{`
         @keyframes chatPopIn {
           0% { opacity: 0; transform: translateY(8px); }
@@ -561,9 +674,67 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
             <button onClick={() => handleCallClick('voice')} className={`p-2.5 rounded-full transition-all duration-200 active:scale-95 ${isPartnerOnline ? 'text-gray-400 hover:text-blue-400 hover:bg-gray-800' : 'text-gray-600 cursor-not-allowed'}`}>
               <svg className="w-[20px] h-[20px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
             </button>
+
+            {/* Chat-level 3-dot header menu */}
+            <div className="relative">
+              <button
+                ref={headerMenuBtnRef}
+                onClick={() => setIsHeaderMenuOpen((prev) => !prev)}
+                className={`p-2.5 rounded-full transition-all duration-200 active:scale-95 text-gray-400 hover:text-gray-200 hover:bg-gray-800 ${isHeaderMenuOpen ? 'bg-gray-800 text-gray-200' : ''}`}
+                title="More options"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="5" r="2" />
+                  <circle cx="12" cy="12" r="2" />
+                  <circle cx="12" cy="19" r="2" />
+                </svg>
+              </button>
+              <ChatHeaderMenu
+                isOpen={isHeaderMenuOpen}
+                onClose={() => setIsHeaderMenuOpen(false)}
+                anchorRef={headerMenuBtnRef}
+                items={[
+                  {
+                    label: 'Search in chat',
+                    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
+                    onClick: () => { setIsSearchOpen(true); setIsHeaderMenuOpen(false); },
+                  },
+                  {
+                    label: isMuted ? 'Unmute' : 'Mute',
+                    active: isMuted,
+                    icon: isMuted
+                      ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072M12 6.253v11.494m-3.536-1.965a5 5 0 010-7.072M5.636 5.636a9 9 0 1012.728 0" /></svg>
+                      : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>,
+                    onClick: () => { handleToggleMute(); setIsHeaderMenuOpen(false); },
+                  },
+                  {
+                    label: isBlocked ? `Unblock ${session.partner.name}` : `Block ${session.partner.name}`,
+                    danger: !isBlocked,
+                    active: isBlocked,
+                    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>,
+                    onClick: () => { handleToggleBlock(); setIsHeaderMenuOpen(false); },
+                  },
+                  {
+                    label: 'Delete chat',
+                    danger: true,
+                    icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+                    onClick: () => { handleDeleteConversation(); setIsHeaderMenuOpen(false); },
+                  },
+                ]}
+              />
+            </div>
           </div>
         </div>
       </div>
+
+      {/* In-chat search bar */}
+      {isSearchOpen && (
+        <ChatSearchBar
+          messages={messages}
+          messageRefs={messageRefs}
+          onClose={() => setIsSearchOpen(false)}
+        />
+      )}
 
       {/* Messages Area */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative bg-gray-900 z-0 flex justify-center">
@@ -748,6 +919,22 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
         </div>
       </div>
 
+      {/* Blocked user banner */}
+      {isBlocked && (
+        <div className="flex-none bg-red-900/20 border-t border-red-900/30 px-4 py-2.5 flex items-center justify-center space-x-2 z-20">
+          <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+          </svg>
+          <span className="text-[13px] text-red-400 font-medium">You blocked {session.partner.name}.</span>
+          <button
+            onClick={handleToggleBlock}
+            className="text-[13px] text-red-300 hover:text-red-200 font-semibold underline underline-offset-2 transition-colors"
+          >
+            Unblock
+          </button>
+        </div>
+      )}
+
       {/* Input Field Area */}
       <div className="flex-none relative z-20 bg-gray-900 border-t border-gray-800 transition-colors duration-300 flex justify-center">
         <div className="w-full max-w-4xl">
@@ -762,6 +949,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
             onSendMessage={(text) => sendMessageToFirestore(text, 'text')} 
             onSendVoice={handleVoiceUpload} 
             onTriggerFileSelect={(type) => {
+              if (isBlocked) {
+                alert(`You have blocked ${session.partner.name}. Unblock to send files.`);
+                return;
+              }
               if (fileInputRef.current) {
                 fileInputRef.current.accept = type === 'media' 
                   ? 'image/*,video/*' 
