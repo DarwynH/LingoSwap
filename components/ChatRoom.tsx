@@ -376,7 +376,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
     }
   };
 
-  const sendMessageToFirestore = async (text: string, type: MessageType = 'text', fileData?: any) => {
+ const sendMessageToFirestore = async (text: string, type: MessageType = 'text', fileData?: any) => {
     if (isBlocked) {
       alert(`You have blocked ${session.partner.name}. Unblock to send messages.`);
       return;
@@ -392,6 +392,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       ? text 
       : `[${type.charAt(0).toUpperCase() + type.slice(1)}]`;
 
+    // 1. Update Sender's Conversation Inbox
     batch.set(userConvRef, {
       lastMessage: previewText,
       timestamp: now,
@@ -400,6 +401,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       partnerAvatar: session.partner.avatar,
     }, { merge: true });
 
+    // 2. Update Receiver's Conversation Inbox
     batch.set(partnerConvRef, {
       lastMessage: previewText,
       timestamp: now,
@@ -409,9 +411,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       unreadCount: increment(1),
     }, { merge: true });
 
-    batch.update(doc(db, 'users', user.id), { lastMessage: previewText, lastMessageAt: now });
-    batch.update(doc(db, 'users', session.partner.id), { lastMessage: previewText, lastMessageAt: now });
+    // REMOVED THE TWO ROOT USER DOCUMENT UPDATES HERE
 
+    // 3. Create the actual message document
     const messagePayload: any = {
       text,
       type,
@@ -448,7 +450,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       console.error('Chat send error:', error);
     }
   };
-
+  
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
