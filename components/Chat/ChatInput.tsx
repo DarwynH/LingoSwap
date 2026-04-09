@@ -1,6 +1,6 @@
-// components/Chat/ChatInput.tsx
 import React, { useState, useEffect } from 'react';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
+import { translateTextToEnglish } from '../../services/translationService';
 
 // NEW: Added props for Reply Feature
 interface ChatInputProps {
@@ -24,6 +24,9 @@ const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const [inputText, setInputText] = useState('');
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false);
+  const [translatedDraft, setTranslatedDraft] = useState<string | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [selectedDraftVersion, setSelectedDraftVersion] = useState<'original' | 'translated'>('original');
 
   const { 
     isRecording, 
@@ -45,9 +48,36 @@ const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleTextSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || isUploading) return;
-    onSendMessage(inputText);
+    if (!inputText.trim() || isUploading || isTranslating) return;
+    
+    const textToSend = (translatedDraft && selectedDraftVersion === 'translated') 
+      ? translatedDraft 
+      : inputText;
+      
+    onSendMessage(textToSend);
     setInputText('');
+    setTranslatedDraft(null);
+    setSelectedDraftVersion('original');
+  };
+
+  const handleTranslate = async () => {
+    if (!inputText.trim() || isTranslating) return;
+    setIsTranslating(true);
+    try {
+      const translated = await translateTextToEnglish(inputText);
+      setTranslatedDraft(translated);
+      setSelectedDraftVersion('translated');
+    } catch (e) {
+      console.error(e);
+      alert('Translation failed. You can still send the original message.');
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const handleCancelTranslation = () => {
+    setTranslatedDraft(null);
+    setSelectedDraftVersion('original');
   };
 
   const handleSendRecording = async () => {
@@ -81,6 +111,68 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: Translation Draft Banner */}
+      {translatedDraft && (
+        <div className="px-3 pt-2 pb-1 animate-chat-msg">
+          <div className="flex flex-col bg-gray-800/80 border border-gray-700 p-2.5 rounded-lg shadow-sm">
+            <div className="flex justify-between items-start mb-2.5">
+              <span className="text-[12px] text-gray-300 font-semibold tracking-wide flex items-center">
+                <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 15h4.498" /></svg>
+                Preview Mode
+              </span>
+              <button 
+                type="button"
+                onClick={handleCancelTranslation} 
+                className="p-1 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded-full transition-colors active:scale-95"
+                title="Cancel translation"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            
+            <div className="flex flex-col gap-2 w-full">
+              {/* Original Text Option */}
+              <button
+                type="button"
+                onClick={() => setSelectedDraftVersion('original')}
+                className={`w-full text-left px-3 py-2 rounded-md transition-colors border relative overflow-hidden ${
+                  selectedDraftVersion === 'original' 
+                    ? 'bg-blue-600/10 border-blue-500/50' 
+                    : 'bg-gray-800/50 border-gray-700 hover:bg-gray-700/50'
+                }`}
+              >
+                {selectedDraftVersion === 'original' && (
+                  <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
+                )}
+                <div className="text-[11px] uppercase tracking-wider font-semibold opacity-70 mb-0.5 text-gray-400">Original</div>
+                <div className={`text-[14px] leading-snug ${selectedDraftVersion === 'original' ? 'text-gray-100' : 'text-gray-400'}`}>
+                  {inputText}
+                </div>
+              </button>
+
+              {/* Translated Text Option */}
+              <button
+                type="button"
+                onClick={() => setSelectedDraftVersion('translated')}
+                className={`w-full text-left px-3 py-2 rounded-md transition-colors border relative overflow-hidden ${
+                  selectedDraftVersion === 'translated' 
+                    ? 'bg-emerald-600/10 border-emerald-500/50' 
+                    : 'bg-gray-800/50 border-gray-700 hover:bg-gray-700/50'
+                }`}
+              >
+                {selectedDraftVersion === 'translated' && (
+                  <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                )}
+                <div className="text-[11px] uppercase tracking-wider font-semibold opacity-70 mb-0.5 text-emerald-500/70">Translated to English</div>
+                <div className={`text-[14px] leading-snug ${selectedDraftVersion === 'translated' ? 'text-gray-100' : 'text-gray-400'}`}>
+                  {translatedDraft}
+                </div>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -175,13 +267,28 @@ const ChatInput: React.FC<ChatInputProps> = ({
           >
             <input
               type="text"
-              className="flex-1 bg-transparent border-none px-4 py-2 text-base text-gray-100 focus:outline-none placeholder-gray-500"
+              className="flex-1 bg-transparent border-none pl-4 pr-1 py-2 text-base text-gray-100 focus:outline-none placeholder-gray-500"
               placeholder="Message"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               disabled={isUploading}
               autoComplete="off"
             />
+            {inputText.trim() && (
+              <button
+                type="button"
+                onClick={handleTranslate}
+                disabled={isTranslating || isUploading}
+                className="p-2 mr-1 text-gray-400 hover:text-emerald-400 disabled:opacity-50 transition-colors active:scale-95 flex items-center justify-center"
+                title="Translate to English"
+              >
+                {isTranslating ? (
+                  <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 15h4.498" /></svg>
+                )}
+              </button>
+            )}
           </form>
         )}
 
@@ -190,7 +297,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
           {inputText.trim() && !isRecording ? (
             <button 
               onClick={handleTextSubmit}
-              disabled={isUploading}
+              disabled={isUploading || isTranslating}
               className="p-2.5 bg-blue-600 text-white rounded-full hover:bg-blue-500 shadow-sm disabled:opacity-50 flex items-center justify-center transition-all duration-200 active:scale-[0.92]"
             >
               <svg className="w-5 h-5 ml-0.5 transform -rotate-45" fill="currentColor" viewBox="0 0 24 24">

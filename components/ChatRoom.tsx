@@ -19,13 +19,14 @@ import {
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import React, { useState, useRef, useEffect } from 'react';
-import { UserProfile, ChatMessage, ChatSession, MessageType, SavedItem, SavedItemType } from '../types';
+import { UserProfile, ChatMessage, ChatSession, MessageType, SavedItem, SavedItemType, PendingAttachment } from '../types';
 import MessageBubble from './Chat/MessageBubble';
 import Avatar from './ui/Avatar';
 import ChatInput from './Chat/ChatInput';
 import WordActionPopup from './Chat/WordActionPopup';
 import ChatHeaderMenu from './Chat/ChatHeaderMenu';
 import ChatSearchBar from './Chat/ChatSearchBar';
+import AttachmentPreviewModal from './Chat/AttachmentPreviewModal';
 import { createPortal } from 'react-dom';
 
 interface ChatRoomProps {
@@ -94,6 +95,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
   
   // Group C & Reply States
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
+  const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
   const [favorites, setFavorites] = useState<string[]>(user.favoriteMessages || []);
 
   // Group A (Phrasebook & Study Later) State
@@ -133,6 +135,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       setTimeout(() => el.classList.remove('bg-gray-800/60', 'rounded-xl'), 1500);
     }
   };
+
+  // Cleanup pending attachment object URL on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingAttachment?.previewUrl) {
+        URL.revokeObjectURL(pendingAttachment.previewUrl);
+      }
+    };
+  }, [pendingAttachment]);
 
   // Jump-to-message interceptor logic (Scrolls and highlights target message)
   useEffect(() => {
@@ -451,6 +462,48 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
     }
   };
   
+  const confirmAndUploadAttachment = async (captionText: string, attachment: PendingAttachment) => {
+    setIsUploading(true);
+    setUploadProgress(0);
+
+    const { file, type: fileType, previewUrl } = attachment;
+    const uniqueFileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${file.name.split('.').pop()}`;
+    const storageRef = ref(storage, `chat_attachments/${session.id}/${uniqueFileName}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    // Clean up local draft immediately from UI
+    setPendingAttachment(null);
+    URL.revokeObjectURL(previewUrl);
+
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+      (error) => {
+        console.error('Upload failed:', error);
+        alert('Upload failed.');
+        setIsUploading(false);
+      },
+      async () => {
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        await sendMessageToFirestore(captionText, fileType, {
+          fileURL: downloadURL,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type,
+        });
+        setIsUploading(false);
+        setUploadProgress(0);
+      }
+    );
+  };
+
+  const handleCancelAttachment = () => {
+    if (pendingAttachment?.previewUrl) {
+      URL.revokeObjectURL(pendingAttachment.previewUrl);
+    }
+    setPendingAttachment(null);
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -470,34 +523,17 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
     if (file.type.startsWith('image/')) fileType = 'image';
     else if (file.type.startsWith('video/')) fileType = 'video';
 
-    setIsUploading(true);
-    setUploadProgress(0);
+    if (pendingAttachment?.previewUrl) {
+      URL.revokeObjectURL(pendingAttachment.previewUrl);
+    }
 
-    const uniqueFileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${file.name.split('.').pop()}`;
-    const storageRef = ref(storage, `chat_attachments/${session.id}/${uniqueFileName}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
+    setPendingAttachment({
+      file,
+      type: fileType,
+      previewUrl: URL.createObjectURL(file)
+    });
 
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
-      (error) => {
-        console.error('Upload failed:', error);
-        alert('Upload failed.');
-        setIsUploading(false);
-      },
-      async () => {
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        await sendMessageToFirestore('', fileType, {
-          fileURL: downloadURL,
-          fileName: file.name,
-          fileSize: file.size,
-          mimeType: file.type,
-        });
-        setIsUploading(false);
-        setUploadProgress(0);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      }
-    );
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleVoiceUpload = async (audioBlob: Blob, duration: number) => {
@@ -979,6 +1015,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
           sourceText={selectedWordContext.sourceText}
           userId={user.id}
           onClose={() => setSelectedWordContext(null)} 
+        />
+      )}
+
+      {/* Attachment Modal */}
+      {pendingAttachment && (
+        <AttachmentPreviewModal 
+          attachment={pendingAttachment}
+          onClose={handleCancelAttachment}
+          onSend={(caption) => confirmAndUploadAttachment(caption, pendingAttachment)}
         />
       )}
     </div>

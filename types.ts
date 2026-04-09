@@ -27,6 +27,12 @@ export interface UserProfile {
 
 export type MessageType = 'text' | 'image' | 'video' | 'file' | 'voice';
 
+export interface PendingAttachment {
+  file: File;
+  type: MessageType;
+  previewUrl: string;
+}
+
 export interface ChatMessage {
   id: string;
   senderId: string;
