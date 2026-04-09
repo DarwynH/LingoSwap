@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ChatMessage } from '../../types';
 import { translateTextToEnglish } from '../../services/translationService'; 
 import MessageTextRenderer from './MessageTextRenderer';
+import MediaLightbox from './MediaLightbox';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -29,6 +30,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [showTranslation, setShowTranslation] = useState(false);
   const [translatedText, setTranslatedText] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const handleToggleTranslation = async () => {
     if (showTranslation) {
@@ -101,13 +103,20 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       )}
 
       {message.type === 'image' && message.fileURL && (
-        <a href={message.fileURL} target="_blank" rel="noopener noreferrer">
+        <div className="relative cursor-pointer transition-opacity hover:opacity-90" onClick={() => setLightboxOpen(true)}>
           <img src={message.fileURL} alt={message.fileName} className="w-full max-w-[220px] sm:max-w-[250px] rounded-xl mb-2 object-cover" />
-        </a>
+        </div>
       )}
 
       {message.type === 'video' && message.fileURL && (
-        <video src={message.fileURL} controls className="w-full max-w-[220px] sm:max-w-[250px] rounded-xl mb-2 bg-black" />
+        <div className="relative cursor-pointer transition-opacity hover:opacity-90 group mb-2 overflow-hidden rounded-xl" onClick={() => setLightboxOpen(true)}>
+          <video src={message.fileURL} className="w-full max-w-[220px] sm:max-w-[250px] bg-black pointer-events-none" />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+            <div className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white/90 shadow-lg">
+              <svg className="w-6 h-6 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+            </div>
+          </div>
+        </div>
       )}
 
       {message.type === 'file' && message.fileURL && (
@@ -202,6 +211,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         </div>
       </div>
       
+      {lightboxOpen && message.fileURL && (
+        <MediaLightbox 
+          url={message.fileURL} 
+          type={message.type as 'image' | 'video'} 
+          onClose={() => setLightboxOpen(false)} 
+        />
+      )}
     </div>
   );
 };
