@@ -13,7 +13,10 @@ export enum Language {
 
 export interface UserProfile {
   id: string;
+  uid?: string;
   name: string;
+  streakCount?: number;
+  dailyStats?: number[];
   email: string;
   nativeLanguage: Language;
   targetLanguage: Language;
@@ -155,4 +158,4 @@ export interface SavedVocabularyItem {
   lastReviewedAt?: number;
   difficulty?: 'easy' | 'medium' | 'hard';
   mastered?: boolean;
-}
+}

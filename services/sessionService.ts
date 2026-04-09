@@ -1,35 +1,33 @@
 import { db } from '../firebase';
-import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
+import { collection, query, getDocs, where } from "firebase/firestore";
 
 export const getDailyActiveSessions = async (userId: string) => {
-    const todayStart = Timestamp.fromDate(new Date(new Date().setHours(0, 0, 0, 0)));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    const chatsQuery = query(
-        collection(db, "chats"),
-        where("participants", "array-contains", userId)
-    );
+    // 1. Get chats where you are a participant
+    const chatsRef = collection(db, "chats");
+    const q = query(chatsRef, where("participants", "array-contains", userId));
+    const chatSnap = await getDocs(q);
 
-    const chatSnap = await getDocs(chatsQuery);
     let activeCount = 0;
 
     for (const chatDoc of chatSnap.docs) {
         const messagesRef = collection(db, "chats", chatDoc.id, "messages");
-        const todayMsgQuery = query(
-            messagesRef,
-            // where("timestamp", ">=", todayStart)
-        );
+        const msgSnap = await getDocs(messagesRef);
 
-        const msgSnap = await getDocs(todayMsgQuery);
         const messages = msgSnap.docs.map(d => d.data());
 
-        // Check for at least one sent and one received message
-        const sent = messages.some(m => m.senderId === userId);
-        const received = messages.some(m => m.senderId !== userId);
+        // 2. Filter for today's messages & check back-and-forth
+        const todayMsgs = messages.filter(m => {
+            const msgDate = m.timestamp?.toDate ? m.timestamp.toDate() : new Date(m.timestamp);
+            return msgDate >= today;
+        });
 
-        if (sent && received) {
-            activeCount++;
-        }
+        const sent = todayMsgs.some(m => m.senderId === userId);
+        const received = todayMsgs.some(m => m.senderId !== userId);
+
+        if (sent && received) activeCount++;
     }
-
     return activeCount;
 };

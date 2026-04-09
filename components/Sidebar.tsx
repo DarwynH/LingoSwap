@@ -41,10 +41,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
   ];
 
   return (
-    <nav className="bg-white border-r border-gray-200 w-20 md:w-64 flex flex-col h-full z-20">
+    <nav className="bg-[#1e293b] border-r border-gray-200 w-20 md:w-64 flex flex-col h-full z-20">
       <div className="p-6 flex items-center space-x-3">
-        <div className="w-8 h-8 bg-[#00a884] rounded-lg flex items-center justify-center">
-          <span className="text-white font-bold text-xl">L</span>
+        <div className="w-100 h-100 rounded-lg overflow-hidden flex items-center justify-center">
+          <img
+            src="/ndhu_logo.png"
+            alt="LingoSwap Logo"
+            className="w-full h-full object-contain"
+          />
         </div>
         <span className="hidden md:block font-bold text-xl text-gray-800">LingoSwap</span>
       </div>
@@ -56,20 +60,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
             onClick={() => onTabChange(tab.id)}
             className={`w-full flex items-center space-x-3 p-3 rounded-xl transition-all ${
               activeTab === tab.id
-                ? 'bg-[#e7f7f3] text-[#00a884]'
-                : 'text-gray-500 hover:bg-gray-50'
+              ? 'bg-[#334159] text-white'
+              : 'text-gray-500 hover:bg-[#334159]'
             }`}
           >
             {tab.icon}
             <span className="hidden md:block font-medium">{tab.label}</span>
           </button>
         ))}
-      </div>
-
-      <div className="p-4 border-t border-gray-100">
-        <p className="hidden md:block text-[10px] text-gray-400 uppercase font-bold tracking-widest text-center">
-          Pro Account
-        </p>
       </div>
     </nav>
   );

@@ -217,7 +217,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
         return;
       }
       const isRecent = partnerStatus.lastSeen ? Date.now() - partnerStatus.lastSeen < 120000 : false;
-      setIsPartnerOnline(partnerStatus.isOnline && isRecent);
+      setIsPartnerOnline((partnerStatus.isOnline || false) && isRecent);
     };
 
     checkPresence();
@@ -922,7 +922,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
                 )}
 
                 <div 
-                  ref={(el) => (messageRefs.current[msg.id] = el)}
+                  ref={(el) => {messageRefs.current[msg.id] = el; }}
                   className={`group flex w-full animate-chat-msg ${isMe ? 'justify-end' : 'justify-start'} ${marginTop}`}
                 >
                   {isMe && actionMenu}

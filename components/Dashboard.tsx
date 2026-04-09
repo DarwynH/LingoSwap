@@ -119,10 +119,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
         </div>
 
         {/* Daily Activity (Bar Chart) */}
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 transition-all hover:shadow-md">
+        <div className="bg-[#1e293b]/50 border border-slate-800 p-6 rounded-3xl shadow-sm border border-gray-100 transition-all hover:shadow-md">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-gray-800">Weekly Activity</h3>
-            <span className="text-[10px] font-bold text-[#162b58] bg-[#f0f0f0] px-2 py-1 rounded-full uppercase tracking-wider">
+            <h3 className="font-bold text-slate-100">Weekly Activity</h3>
+            <span className="text-[10px] font-bold text-red bg-[#f0f0f0] px-2 py-1 rounded-full uppercase tracking-wider">
               Live Tracking
             </span>
           </div>
@@ -141,13 +141,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
 
                   <div
                     className={`w-full rounded-t-lg transition-all duration-700 ease-out shadow-sm ${isToday
-                      ? 'bg-gradient-to-t from-[#162b58] to-[#a0adc8] scale-105'
+                      ? 'bg-gradient-to-t from-[#a0adc8] to-white scale-105'
                       : 'bg-[#d8dce3] hover:bg-[#a0adc8]'
                       }`}
                     style={{ height: `${heightPercentage}%` }}
                   ></div>
 
-                  <span className={`text-[10px] mt-3 font-bold ${isToday ? 'text-[##162b58]' : 'text-gray-400'}`}>
+                  <span className={`text-[10px] mt-3 font-bold ${isToday ? 'text-white' : 'text-gray-400'}`}>
                     {['S', 'M', 'T', 'W', 'T', 'F', 'S'][i]}
                   </span>
                 </div>
