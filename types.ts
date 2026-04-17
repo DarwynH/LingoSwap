@@ -25,7 +25,7 @@ export interface UserProfile {
   favoriteMessages?: string[]; 
 }
 
-export type MessageType = 'text' | 'image' | 'video' | 'file' | 'voice';
+export type MessageType = 'text' | 'image' | 'video' | 'file' | 'voice' | 'system';
 
 export interface PendingAttachment {
   file: File;
@@ -62,7 +62,7 @@ export interface ChatSession {
   lastMessage?: string;
 }
 
-export type CallStatus = 'ringing' | 'connecting' | 'active' | 'rejected' | 'ended';
+export type CallStatus = 'ringing' | 'connecting' | 'active' | 'rejected' | 'ended' | 'offline' | 'busy' | 'missed';
 
 export interface CallData {
   id: string; 

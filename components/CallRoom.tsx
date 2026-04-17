@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { UserProfile } from '../types';
+import { UserProfile, CallStatus } from '../types';
 import { db } from '../firebase';
 import { doc, updateDoc, getDoc, collection, addDoc, onSnapshot } from 'firebase/firestore';
+import CallControls from './CallControls';
 
 interface CallRoomProps {
   currentUser: UserProfile;
   partner: UserProfile;
   callId: string | null;
   callType: 'voice' | 'video'; // NEW: Accept the call type
-  onClose: () => void;
+  onClose: (reason: CallStatus) => void;
 }
 
 const servers = {
@@ -26,6 +27,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const timerRef = useRef<number | null>(null);
+  const timeoutRef = useRef<number | null>(null);
   
   // NEW: Refs for the video elements
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -33,6 +35,45 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
   
   const hasSetupStarted = useRef(false);
   const ringbackRef = useRef<HTMLAudioElement | null>(null);
+
+  // New UI states
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoEnabling, setIsVideoEnabling] = useState(false);
+  const [myVideoActive, setMyVideoActive] = useState(callType === 'video');
+  const [partnerVideoActive, setPartnerVideoActive] = useState(callType === 'video');
+  
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
+
+  useEffect(() => {
+    const getDevices = async () => {
+      // Graceful handling if `setSinkId` isn't supported (e.g. Safari, Firefox by default)
+      if (typeof (HTMLMediaElement.prototype as any).setSinkId !== 'function') {
+        return;
+      }
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const outputs = devices.filter(d => d.kind === 'audiooutput');
+        setAudioDevices(outputs);
+        if (outputs.length > 0) setCurrentDeviceId(outputs[0].deviceId);
+      } catch (e) {
+        console.warn("Audio devices not fully accessible");
+      }
+    };
+    getDevices();
+  }, []);
+
+  const createDummyVideoTrack = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1; canvas.height = 1;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+       ctx.fillStyle = '#111';
+       ctx.fillRect(0, 0, 1, 1);
+    }
+    const dummyStream = canvas.captureStream(1);
+    return dummyStream.getVideoTracks()[0];
+  };
 
   useEffect(() => {
     if (!callId || hasSetupStarted.current) return;
@@ -48,13 +89,16 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
         try {
           localStreamRef.current = await navigator.mediaDevices.getUserMedia({ 
             audio: true, 
-            video: callType === 'video' // True if video call, false if voice
+            video: callType === 'video' 
           });
+
+          if (callType === 'voice') {
+            localStreamRef.current.addTrack(createDummyVideoTrack());
+          }
         } catch (micError) {
           throw new Error(`Microphone ${callType === 'video' ? 'and Camera' : ''} access denied. Please allow permissions.`);
         }
 
-        // Attach local stream to the picture-in-picture video element
         if (callType === 'video' && localVideoRef.current) {
           localVideoRef.current.srcObject = localStreamRef.current;
         }
@@ -82,6 +126,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
         pc.onconnectionstatechange = () => {
           if (pc.connectionState === 'connected') {
             if (ringbackRef.current) ringbackRef.current.pause(); 
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
             setStatus('active');
             timerRef.current = window.setInterval(() => setCallTime((t) => t + 1), 1000);
           } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
@@ -103,6 +148,12 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
           ringbackRef.current.loop = true;
           ringbackRef.current.play().catch(e => console.warn("Ringback autoplay blocked:", e));
 
+          // 30-second timeout for the caller
+          timeoutRef.current = window.setTimeout(() => {
+            // we have to check if still connecting or in initial state
+            handleHangup(true, 'missed');
+          }, 30000);
+
           pc.onicecandidate = (event) => {
             event.candidate && addDoc(callerCandidatesRef, event.candidate.toJSON());
           };
@@ -121,6 +172,9 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
             }
             if (data?.status === 'rejected' || data?.status === 'ended') {
               handleHangup(false);
+            }
+            if (data?.[`video_${partner.id}`] !== undefined) {
+              setPartnerVideoActive(data[`video_${partner.id}`]);
             }
           });
 
@@ -167,6 +221,9 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
             if (data?.status === 'ended') {
               handleHangup(false);
             }
+            if (data?.[`video_${partner.id}`] !== undefined) {
+              setPartnerVideoActive(data[`video_${partner.id}`]);
+            }
           });
 
           unsubCallerICE = onSnapshot(callerCandidatesRef, (snapshot) => {
@@ -196,6 +253,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
 
   const cleanupMedia = () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => track.stop());
     }
@@ -207,20 +265,24 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
     }
   };
 
-  const handleHangup = async (updateFirebase = true) => {
+  const handleHangup = async (updateFirebase = true, explicitStatus?: CallStatus) => {
+    let finalStatus = explicitStatus;
+    if (!finalStatus) {
+      finalStatus = status === 'connecting' ? 'missed' : 'ended';
+    }
     setStatus('ended');
     cleanupMedia();
 
     if (updateFirebase && callId) {
       try {
-        await updateDoc(doc(db, 'calls', callId), { status: 'ended' });
+        await updateDoc(doc(db, 'calls', callId), { status: finalStatus });
       } catch (err) {
         console.error("Error updating call status:", err);
       }
     }
     
     setTimeout(() => {
-      onClose();
+      onClose(finalStatus!);
     }, 1500);
   };
 
@@ -230,41 +292,100 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const toggleMute = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsMuted(!audioTrack.enabled);
+      }
+    }
+  };
+
+  const toggleVideo = async () => {
+    if (!pcRef.current || !localStreamRef.current || !callId) return;
+
+    if (myVideoActive) {
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = false;
+        videoTrack.stop();
+        
+        const dummyTrack = createDummyVideoTrack();
+        const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) await sender.replaceTrack(dummyTrack);
+        
+        localStreamRef.current.removeTrack(videoTrack);
+        localStreamRef.current.addTrack(dummyTrack);
+        
+        setMyVideoActive(false);
+        await updateDoc(doc(db, 'calls', callId), { [`video_${currentUser.id}`]: false });
+      }
+    } else {
+      setIsVideoEnabling(true);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const newVideoTrack = stream.getVideoTracks()[0];
+        const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) {
+          await sender.replaceTrack(newVideoTrack);
+        }
+        
+        const oldTrack = localStreamRef.current.getVideoTracks()[0];
+        if (oldTrack) {
+          oldTrack.stop();
+          localStreamRef.current.removeTrack(oldTrack);
+        }
+        
+        localStreamRef.current.addTrack(newVideoTrack);
+        
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = localStreamRef.current;
+        }
+
+        setMyVideoActive(true);
+        await updateDoc(doc(db, 'calls', callId), { [`video_${currentUser.id}`]: true });
+      } catch (err) {
+        console.error("Could not obtain video:", err);
+        alert("Camera access denied or failed.");
+      } finally {
+        setIsVideoEnabling(false);
+      }
+    }
+  };
+
+
+
   return (
     <div className="flex-1 flex flex-col items-center justify-between bg-[#075e54] text-white relative h-full overflow-hidden">
       
-      {/* Remote Video Element (Hidden if voice-only, full background if video) */}
+      {/* Remote Video Element (Main Background) */}
       <video 
         ref={remoteVideoRef} 
         autoPlay 
         playsInline 
-        className={callType === 'video' ? "absolute inset-0 w-full h-full object-cover z-0" : "hidden"} 
+        className={`absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-1000 ${partnerVideoActive && status === 'active' ? 'opacity-100' : 'opacity-0'}`} 
       />
 
       {/* Local Video Element (Picture-in-Picture) */}
-      {callType === 'video' && (
-        <video 
-          ref={localVideoRef} 
-          autoPlay 
-          playsInline 
-          muted // CRITICAL: Mute local video so you don't hear your own echo!
-          className="absolute bottom-32 right-6 w-28 h-40 bg-[#1a1a1a] rounded-xl object-cover border-2 border-white/20 shadow-2xl z-10" 
-        />
-      )}
+      <video 
+        ref={localVideoRef} 
+        autoPlay 
+        playsInline 
+        muted 
+        className={`absolute bottom-32 right-6 w-28 h-40 bg-gray-900 rounded-2xl object-cover border border-white/20 shadow-2xl z-20 transition-all duration-500 ease-out origin-bottom-right ${myVideoActive ? 'opacity-100 transform scale-100' : 'opacity-0 transform scale-90 pointer-events-none'}`} 
+      />
 
       {/* Top Header / Avatar UI */}
-      <div className={`text-center z-10 w-full px-4 ${callType === 'voice' ? 'mt-12' : 'mt-8'}`}>
+      <div className={`text-center z-10 w-full px-4 transition-all duration-700 mt-12 ${partnerVideoActive && status === 'active' ? 'translate-y-[-20px] opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
         
-        {/* Only show avatar for voice calls */}
-        {callType === 'voice' && (
-          <img 
-            src={partner.avatar} 
-            className={`w-32 h-32 rounded-full border-4 border-[#25d366] mx-auto shadow-2xl ${status === 'connecting' && !errorMsg ? 'animate-pulse' : ''}`} 
-            alt="partner avatar"
-          />
-        )}
+        <img 
+          src={partner.avatar} 
+          className={`w-32 h-32 rounded-full border-4 border-[#25d366] mx-auto shadow-2xl object-cover ${status === 'connecting' && !errorMsg ? 'animate-pulse' : ''}`} 
+          alt="partner avatar"
+        />
         
-        <h2 className={`font-bold ${callType === 'voice' ? 'text-2xl mt-6' : 'text-xl drop-shadow-md'}`}>
+        <h2 className="font-bold text-2xl mt-6">
           {partner.name}
         </h2>
         
@@ -274,35 +395,45 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
             <p className="text-sm mt-1">{errorMsg}</p>
           </div>
         ) : (
-          <div className={`mt-2 ${callType === 'video' ? 'bg-black/40 inline-block px-4 py-1 rounded-full backdrop-blur-sm' : ''}`}>
-            <p className={`font-medium ${callType === 'voice' ? 'text-[#25d366]' : 'text-white'}`}>
+          <div className="mt-2 bg-black/30 inline-block px-4 py-1.5 rounded-full backdrop-blur-sm border border-white/10">
+            <p className="font-medium text-[#25d366]">
               {status === 'connecting' ? 'Connecting...' : status === 'active' ? formatTime(callTime) : 'Call Ended'}
             </p>
           </div>
         )}
       </div>
 
-      {/* Voice Practice Text Overlay (Only for voice calls) */}
-      {callType === 'voice' && status === 'active' && (
-        <div className="w-full max-w-xs space-y-4 z-10">
-          <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl text-center text-sm border border-white/20">
+      {/* Voice Practice Text Overlay */}
+      <div className={`w-full max-w-xs space-y-4 z-10 transition-all duration-700 ${partnerVideoActive && status === 'active' ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100'}`}>
+        {status === 'active' && (
+          <div className="bg-white/10 backdrop-blur-md p-4 flex flex-col items-center rounded-2xl text-center text-sm border border-white/20">
             <p className="opacity-80">Practice your {partner.nativeLanguage} skills</p>
             <p className="font-bold text-[#25d366] mt-1 italic">"Speak naturally!"</p>
           </div>
-        </div>
-      )}
-
-      {/* Bottom Controls */}
-      <div className="mb-12 flex space-x-8 z-10">
-        <button 
-          onClick={() => handleHangup(true)}
-          className="p-4 bg-red-500 hover:bg-red-600 rounded-full shadow-lg transform active:scale-90 transition-all"
-        >
-          <svg className="w-8 h-8 rotate-135" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.994.994 0 01-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" />
-          </svg>
-        </button>
+        )}
       </div>
+
+      {/* Bottom Controls Panel */}
+      <CallControls 
+        isMuted={isMuted}
+        isVideoActive={myVideoActive}
+        isVideoEnabling={isVideoEnabling}
+        audioDevices={audioDevices}
+        currentDeviceId={currentDeviceId}
+        onToggleMute={toggleMute}
+        onToggleVideo={toggleVideo}
+        onSelectAudioDevice={async (deviceId) => {
+          if (remoteVideoRef.current && typeof (remoteVideoRef.current as any).setSinkId === 'function') {
+            try {
+              await (remoteVideoRef.current as any).setSinkId(deviceId);
+              setCurrentDeviceId(deviceId);
+            } catch (e) {
+              console.error("setSinkId error", e);
+            }
+          }
+        }}
+        onHangup={() => handleHangup(true, 'ended')}
+      />
     </div>
   );
 };
