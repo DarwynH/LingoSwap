@@ -257,7 +257,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
         ...docSnap.data(),
       })) as ChatMessage[];
 
-      setMessages(liveMessages);
+      const now = Date.now();
+      const expiredSystemMsgs = liveMessages.filter(m => m.type === 'system' && now - m.timestamp > 86400000);
+      if (expiredSystemMsgs.length > 0) {
+        expiredSystemMsgs.forEach(m => {
+          deleteDoc(doc(db, 'chats', session.id, 'messages', m.id)).catch(() => {});
+        });
+      }
+
+      const validMessages = liveMessages.filter(m => !(m.type === 'system' && now - m.timestamp > 86400000));
+      setMessages(validMessages);
       setTimeout(scrollToBottom, 50);
 
       if (snapshot.empty) {
@@ -782,9 +791,29 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
             const nextMsg = messages[index + 1];
 
             const showDate = !prevMsg || !isSameDay(prevMsg.timestamp, msg.timestamp);
+
+            if (msg.type === 'system') {
+              return (
+                <React.Fragment key={msg.id}>
+                  {showDate && (
+                    <div className="flex justify-center my-6">
+                      <span className="bg-gray-800/60 text-gray-400 text-xs font-semibold px-4 py-1.5 rounded-full border border-gray-700/50 backdrop-blur-sm">
+                        {formatDateSeparator(msg.timestamp)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="w-full flex justify-center my-3 relative" ref={(el) => (messageRefs.current[msg.id] = el)}>
+                    <div className="bg-gray-800/80 text-gray-300 text-[12.5px] tracking-wide px-5 py-2 rounded-full border border-gray-700/50 backdrop-blur-md shadow-sm">
+                      {msg.text}
+                    </div>
+                  </div>
+                </React.Fragment>
+              );
+            }
+
             const TIME_LIMIT = 5 * 60 * 1000;
-            const isGroupedWithPrev = prevMsg && prevMsg.senderId === msg.senderId && (msg.timestamp - prevMsg.timestamp < TIME_LIMIT) && !showDate;
-            const isGroupedWithNext = nextMsg && nextMsg.senderId === msg.senderId && (nextMsg.timestamp - msg.timestamp < TIME_LIMIT) && isSameDay(msg.timestamp, nextMsg.timestamp);
+            const isGroupedWithPrev = prevMsg && prevMsg.type !== 'system' && prevMsg.senderId === msg.senderId && (msg.timestamp - prevMsg.timestamp < TIME_LIMIT) && !showDate;
+            const isGroupedWithNext = nextMsg && nextMsg.type !== 'system' && nextMsg.senderId === msg.senderId && (nextMsg.timestamp - msg.timestamp < TIME_LIMIT) && isSameDay(msg.timestamp, nextMsg.timestamp);
 
             const isGroupStart = !isGroupedWithPrev;
             const isGroupEnd = !isGroupedWithNext;

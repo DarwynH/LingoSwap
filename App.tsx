@@ -1,5 +1,5 @@
 import { db, auth } from './firebase';
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, onSnapshot, getDocs, writeBatch, increment } from 'firebase/firestore';
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, Language, ChatSession, CallData, ChatMessage } from './types';
 import Auth from './components/Auth';
@@ -261,6 +261,62 @@ useEffect(() => {
     }
   };
 
+  const logCallMessageInChat = async (targetPartner: UserProfile, status: 'missed' | 'rejected' | 'declined' | 'ended' | 'offline' | 'busy', type: 'voice' | 'video', callerId: string) => {
+    if (!user) return;
+    const isCaller = user.id === callerId;
+    const chatId = [user.id, targetPartner.id].sort().join('_');
+    let text = '';
+    const typeCased = type.charAt(0).toUpperCase() + type.slice(1);
+    
+    if (status === 'missed') text = isCaller ? `No answer for ${type} call` : `Missed ${type} call`;
+    else if (status === 'rejected' || status === 'declined') text = isCaller ? `${typeCased} call declined` : `You declined ${type} call`;
+    else if (status === 'offline') text = `Missed ${type} call (User offline)`;
+    else if (status === 'busy') text = `Missed ${type} call (User busy)`;
+    else if (status === 'ended') text = `${typeCased} call ended`;
+
+    const now = Date.now();
+    const batch = writeBatch(db);
+    const newMessageRef = doc(collection(db, 'chats', chatId, 'messages'));
+    
+    batch.set(newMessageRef, {
+      text,
+      type: 'system',
+      senderId: callerId, 
+      receiverId: isCaller ? targetPartner.id : user.id,
+      timestamp: now,
+      read: false,
+      readAt: null
+    });
+
+    const userConvRef = doc(db, 'users', user.id, 'conversations', targetPartner.id);
+    const partnerConvRef = doc(db, 'users', targetPartner.id, 'conversations', user.id);
+    
+    const previewText = `[${typeCased} Call]`;
+
+    batch.set(userConvRef, {
+      lastMessage: previewText,
+      timestamp: now,
+      partnerId: targetPartner.id,
+      partnerName: targetPartner.name,
+      partnerAvatar: targetPartner.avatar,
+    }, { merge: true });
+
+    batch.set(partnerConvRef, {
+      lastMessage: previewText,
+      timestamp: now,
+      partnerId: user.id,
+      partnerName: user.name,
+      partnerAvatar: user.avatar,
+      unreadCount: increment(1),
+    }, { merge: true });
+
+    try {
+      await batch.commit();
+    } catch(e) {
+      console.warn("Could not log call message:", e);
+    }
+  };
+
   const handleStartCall = async (partner: UserProfile, existingCallId?: string, type: 'voice' | 'video' = 'voice') => {
     if (!user) return;
 
@@ -268,6 +324,53 @@ useEffect(() => {
 
     if (!existingCallId) {
       try {
+        const partnerDoc = await getDoc(doc(db, 'users', partner.id));
+        const partnerData = partnerDoc.data() as UserProfile | undefined;
+        
+        const isRecent = partnerData?.lastSeen ? Date.now() - partnerData.lastSeen < 120000 : false;
+        const isOnline = partnerData?.isOnline && isRecent;
+        
+        if (!isOnline) {
+          alert(`${partner.name} is offline.`);
+          await logCallMessageInChat(partner, 'offline', type, user.id);
+          return;
+        }
+
+        const receiverCallsQuery = query(
+          collection(db, "calls"),
+          where("receiverId", "==", partner.id),
+          where("status", "in", ["ringing", "connecting", "active"])
+        );
+        const callerCallsQuery = query(
+          collection(db, "calls"),
+          where("callerId", "==", partner.id),
+          where("status", "in", ["ringing", "connecting", "active"])
+        );
+
+        const [receiverSnap, callerSnap] = await Promise.all([
+          getDocs(receiverCallsQuery),
+          getDocs(callerCallsQuery)
+        ]);
+
+        const now = Date.now();
+        const isBusy = [...receiverSnap.docs, ...callerSnap.docs].some((docSnap) => {
+          const c = docSnap.data();
+          const age = now - (c.createdAt || 0);
+
+          // Ignore stale ringing/connecting stuck over 60s
+          if ((c.status === 'ringing' || c.status === 'connecting') && age > 60000) return false;
+          // Ignore abandoned active calls stuck over 12 hours
+          if (c.status === 'active' && age > 12 * 60 * 60 * 1000) return false;
+          
+          return true;
+        });
+
+        if (isBusy) {
+          alert(`${partner.name} is currently in another call.`);
+          await logCallMessageInChat(partner, 'busy', type, user.id);
+          return;
+        }
+
         const callDocRef = doc(collection(db, 'calls'));
         callIdToUse = callDocRef.id;
 
@@ -343,6 +446,16 @@ useEffect(() => {
     if (!incomingCall) return;
     try {
       await updateDoc(doc(db, "calls", incomingCall.id), { status: 'rejected' });
+      const partner: UserProfile = {
+        id: incomingCall.callerId,
+        name: incomingCall.callerName,
+        avatar: incomingCall.callerAvatar,
+        email: '',
+        bio: '',
+        nativeLanguage: Language.ENGLISH,
+        targetLanguage: Language.SPANISH
+      };
+      await logCallMessageInChat(partner, 'rejected', incomingCall.type, incomingCall.callerId);
       setIncomingCall(null);
     } catch (error) {
       console.error("Error rejecting call:", error);
@@ -362,23 +475,53 @@ useEffect(() => {
 
   return (
     <div className="fixed inset-0 w-full flex flex-col max-w-6xl mx-auto bg-white shadow-xl overflow-hidden overscroll-none touch-manipulation">
+      <style>{`
+        @keyframes slideInDown {
+          0% { opacity: 0; transform: translateY(-20px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        .animate-call-popup {
+          animation: slideInDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+      `}</style>
+      
       {/* Incoming Call Overlay */}
       {incomingCall && view !== 'call' && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[100] bg-[#1a1a1a] text-white p-4 rounded-2xl shadow-2xl flex items-center space-x-4 border border-[#25d366]/30 animate-bounce">
-          <img src={incomingCall.callerAvatar} alt="caller" className="w-12 h-12 rounded-full border-2 border-[#25d366]" />
-          <div>
-            <h4 className="font-bold">{incomingCall.callerName}</h4>
-            <p className="text-sm text-[#25d366]">
-              Incoming {incomingCall.type === 'video' ? 'video' : 'voice'} call...
-            </p>
-          </div>
-          <div className="flex space-x-2 ml-4">
-            <button onClick={handleRejectCall} className="p-3 bg-red-500 rounded-full hover:bg-red-600">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.994.994 0 01-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" /></svg>
-            </button>
-            <button onClick={handleAcceptCall} className="p-3 bg-[#25d366] rounded-full hover:bg-green-500">
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" /></svg>
-            </button>
+        <div className="absolute top-4 left-4 right-4 md:left-auto md:right-6 md:w-96 z-[100] animate-call-popup">
+          <div className="bg-gray-900 border border-gray-700/50 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl p-4 flex items-center space-x-4 backdrop-blur-xl">
+            <div className="relative flex-shrink-0">
+              <img src={incomingCall.callerAvatar} alt="caller" className="w-14 h-14 rounded-full object-cover border border-gray-700" />
+              <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#25d366] border-2 border-gray-900 rounded-full animate-pulse"></span>
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              <h4 className="font-bold text-gray-100 text-base truncate">{incomingCall.callerName}</h4>
+              <p className="text-sm text-[#25d366] font-medium flex items-center gap-1.5 mt-0.5">
+                {incomingCall.type === 'video' ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                )}
+                Incoming {incomingCall.type} call
+              </p>
+            </div>
+            
+            <div className="flex items-center space-x-2 flex-shrink-0">
+              <button 
+                onClick={handleRejectCall} 
+                className="w-10 h-10 flex items-center justify-center bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-full transition-colors"
+                title="Decline"
+              >
+                <svg className="w-5 h-5 rotate-135" fill="currentColor" viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.994.994 0 01-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" /></svg>
+              </button>
+              <button 
+                onClick={handleAcceptCall} 
+                className="w-10 h-10 flex items-center justify-center bg-[#25d366] text-white hover:bg-green-500 rounded-full transition-colors shadow-lg shadow-[#25d366]/30"
+                title="Accept"
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z" /></svg>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -444,7 +587,20 @@ useEffect(() => {
           callId={activeCallId}     
           partner={activeSession.partner} 
           callType={activeCallType} 
-          onClose={() => setView(activeSession.id.startsWith('call_') ? 'main' : (isDesktop ? 'main' : 'chat'))} 
+          onClose={(reason) => {
+            if (reason === 'missed' || reason === 'ended') {
+              // Ensure we only log if it's our action to log or was missed by system
+              // The caller logs a missed call.
+              if (reason === 'missed' && activeCallId) {
+                logCallMessageInChat(activeSession.partner, 'missed', activeCallType, user.id);
+              }
+              // Active ended call is logged as 'ended'
+              if (reason === 'ended' && activeCallId) {
+                logCallMessageInChat(activeSession.partner, 'ended', activeCallType, user.id);
+              }
+            }
+            setView(activeSession.id.startsWith('call_') ? 'main' : (isDesktop ? 'main' : 'chat'));
+          }} 
         />
       )}
     </div>

@@ -13,10 +13,10 @@ export enum Language {
 
 export interface UserProfile {
   id: string;
-  uid?: string;
+  uid?: string; // Kept from your local
   name: string;
-  streakCount?: number;
-  dailyStats?: number[];
+  streakCount?: number; // Kept from your local
+  dailyStats?: number[]; // Kept from your local
   email: string;
   nativeLanguage: Language;
   targetLanguage: Language;
@@ -28,7 +28,8 @@ export interface UserProfile {
   favoriteMessages?: string[]; 
 }
 
-export type MessageType = 'text' | 'image' | 'video' | 'file' | 'voice';
+// Added 'system' from the update
+export type MessageType = 'text' | 'image' | 'video' | 'file' | 'voice' | 'system';
 
 export interface PendingAttachment {
   file: File;
@@ -65,7 +66,8 @@ export interface ChatSession {
   lastMessage?: string;
 }
 
-export type CallStatus = 'ringing' | 'connecting' | 'active' | 'rejected' | 'ended';
+// Added 'offline', 'busy', and 'missed' from the update
+export type CallStatus = 'ringing' | 'connecting' | 'active' | 'rejected' | 'ended' | 'offline' | 'busy' | 'missed';
 
 export interface CallData {
   id: string; 
@@ -79,6 +81,8 @@ export interface CallData {
   answer?: RTCSessionDescriptionInit;
   createdAt: number;
 }
+
+// ... the rest of the file (ConversationPreview, SavedItem, etc.) stays the same as they were identical
 
 export interface ConversationPreview {
   partnerId: string;
@@ -152,7 +156,7 @@ export interface SavedVocabularyItem {
   createdAt: number;
   updatedAt: number;
 
-  // Future review metadata
+  // Future review
   reviewed?: boolean;
   reviewCount?: number;
   lastReviewedAt?: number;
