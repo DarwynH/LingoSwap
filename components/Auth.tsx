@@ -6,8 +6,7 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
-  signInWithPopup,
-  fetchSignInMethodsForEmail
+  signInWithPopup
 } from 'firebase/auth';
 
 interface AuthProps {
@@ -22,21 +21,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onBack, initialIsLogin = true }) =
   const [isLogin, setIsLogin] = useState(initialIsLogin);
 
   const handleForgotPassword = async () => {
-    if (!email) {
+    if (!email.trim()) {
       alert("Please enter your email first.");
       return;
     }
     try {
-      try {
-        const methods = await fetchSignInMethodsForEmail(auth, email);
-        if (methods.includes('google.com') && !methods.includes('password')) {
-          alert("This email is registered with Google. Please use Continue with Google.");
-          return;
-        }
-      } catch (e) {
-        // Ignore if enumeration protection is enabled or fetch fails
-      }
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordResetEmail(auth, email.trim());
       alert("Password reset email sent!");
     } catch (error: any) {
       alert(error.message);
