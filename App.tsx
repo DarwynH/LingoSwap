@@ -10,6 +10,7 @@ import ChatRoom from './components/ChatRoom';
 import CallRoom from './components/CallRoom';
 import ProfileSetup from './components/ProfileSetup';
 import Sidebar, { TabType } from './components/Sidebar';
+import Landing from './components/Landing';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 import SavedItemsView from './components/SavedItemsView';
 import { useMediaQuery } from './hooks/useMediaQuery';
@@ -17,7 +18,8 @@ import { playMessageNotification } from './utils/notificationSound';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [view, setView] = useState<'auth' | 'setup' | 'main' | 'chat' | 'call'>('auth');
+  const [view, setView] = useState<'landing' | 'auth' | 'setup' | 'main' | 'chat' | 'call'>('landing');
+  const [authMode, setAuthMode] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [selectedPartner, setSelectedPartner] = useState<UserProfile | null>(null);
@@ -95,7 +97,7 @@ useEffect(() => {
         }
       } else {
         setUser(null);
-        setView('auth');
+        setView('landing');
         if (heartbeatInterval) clearInterval(heartbeatInterval);
       }
     });
@@ -417,7 +419,7 @@ useEffect(() => {
     await signOut(auth);
     sessionStorage.removeItem('lingoswap_user');
     setUser(null);
-    setView('auth');
+    setView('landing');
   };
 
   const handleAcceptCall = async () => {
@@ -526,7 +528,8 @@ useEffect(() => {
         </div>
       )}
 
-      {view === 'auth' && <Auth onLogin={handleLogin} />}
+      {view === 'landing' && <Landing onNavigateToAuth={(isLogin) => { setAuthMode(isLogin); setView('auth'); }} />}
+      {view === 'auth' && <Auth key={authMode ? 'login' : 'signup'} initialIsLogin={authMode} onLogin={handleLogin} onBack={() => setView('landing')} />}
       {view === 'setup' && user && <ProfileSetup profile={user} onSave={handleProfileSave} />}
       
       {view === 'main' && user && (
