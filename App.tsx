@@ -94,6 +94,18 @@ useEffect(() => {
               setIncomingCall(null);
             }
           });
+        } else {
+          const newProfile: UserProfile = {
+            id: firebaseUser.uid,
+            name: firebaseUser.displayName || '',
+            email: firebaseUser.email || '',
+            avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
+            bio: '',
+            nativeLanguage: Language.ENGLISH,
+            targetLanguage: Language.SPANISH
+          };
+          setUser(newProfile);
+          setView('setup');
         }
       } else {
         setUser(null);
