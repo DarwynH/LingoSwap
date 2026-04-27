@@ -1,18 +1,28 @@
 import React from 'react';
+import { UserProfile } from '../types';
+import { getLevelInfo } from '../services/gamificationService';
+import LevelBadge from './ui/LevelBadge';
+import Avatar from './ui/Avatar';
 
-export type TabType = 'dashboard' | 'partners' | 'chats' | 'saved';
+export type TabType = 'dashboard' | 'progress' | 'partners' | 'chats' | 'saved';
 
 interface SidebarProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
   unreadCount?: number;
+  user?: UserProfile;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount = 0 }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount = 0, user }) => {
   const tabs = [
     { id: 'dashboard' as TabType, label: 'Dashboard', icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    )},
+    { id: 'progress' as TabType, label: 'Progress', icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
       </svg>
     )},
     { id: 'partners' as TabType, label: 'Discover', icon: (
@@ -69,6 +79,26 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
           </button>
         ))}
       </div>
+
+      {/* User Profile Footer */}
+      {user && (() => {
+        const level = getLevelInfo(user.xp || 0);
+        return (
+          <div className="p-3 border-t border-theme-border">
+            <div className="flex items-center space-x-3 px-1">
+              <Avatar src={user.avatar} size="sm" online />
+              <div className="hidden md:block flex-1 min-w-0">
+                <p className="text-sm font-semibold text-theme-text truncate">{user.name}</p>
+                <LevelBadge level={level} size="sm" />
+              </div>
+            </div>
+            {/* Collapsed sidebar: show badge below avatar */}
+            <div className="md:hidden mt-2 flex justify-center">
+              <LevelBadge level={level} size="sm" />
+            </div>
+          </div>
+        );
+      })()}
     </nav>
   );
 };

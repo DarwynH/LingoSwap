@@ -28,6 +28,7 @@ import ChatHeaderMenu from './Chat/ChatHeaderMenu';
 import ChatSearchBar from './Chat/ChatSearchBar';
 import AttachmentPreviewModal from './Chat/AttachmentPreviewModal';
 import { createPortal } from 'react-dom';
+import { recordActions } from '../services/gamificationService';
 
 interface ChatRoomProps {
   user: UserProfile;
@@ -465,6 +466,16 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
 
     try {
       await batch.commit();
+      // Gamification: award XP and update quests in a single atomic write
+      const isReply = !!replyTarget;
+      const questUpdates = [
+        { questId: 'send_messages', amount: 1 },
+        { questId: 'start_conversation', amount: 1 },
+        ...(isReply ? [{ questId: 'send_reply', amount: 1 }] : []),
+      ];
+      recordActions(user.id, [
+        { xpAction: isReply ? 'replySent' : 'messageSent', questUpdates },
+      ]).catch((e) => console.warn('Gamification update failed:', e));
       setReplyTarget(null);
     } catch (error) {
       console.error('Chat send error:', error);
@@ -677,6 +688,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
           originalTimestamp: msg.timestamp,
         };
         await setDoc(docRef, savedItem);
+        // Gamification: award XP and update quest on save (single atomic write)
+        recordActions(user.id, [
+          { xpAction: 'itemSaved', questUpdates: [{ questId: 'save_item', amount: 1 }] },
+        ]).catch((e) => console.warn('Gamification update failed:', e));
       }
     } catch (e) {
       console.error(`Failed to toggle ${type}`, e);

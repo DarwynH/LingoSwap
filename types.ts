@@ -25,7 +25,43 @@ export interface UserProfile {
   avatar: string;
   isOnline?: boolean;
   lastSeen?: number;
-  favoriteMessages?: string[]; 
+  favoriteMessages?: string[];
+  xp?: number;
+  questData?: QuestData;
+}
+
+// Gamification Types
+export type XPActionType =
+  | 'messageSent'
+  | 'replySent'
+  | 'itemSaved'
+  | 'profileCompleted'
+  | 'dailyLogin'
+  | 'questClaimed';
+
+export interface QuestItem {
+  id: string;
+  title: string;
+  description: string;
+  target: number;
+  progress: number;
+  reward: number; // bonus XP
+  claimed: boolean;
+}
+
+export interface QuestData {
+  date: string; // e.g. "Mon Apr 28 2026"
+  quests: QuestItem[];
+  lastClaimedAt?: number;
+}
+
+export interface LevelInfo {
+  name: string;
+  index: number;
+  threshold: number;
+  nextThreshold: number | null;
+  progress: number; // 0-100
+  icon: string;
 }
 
 // Added 'system' from the update

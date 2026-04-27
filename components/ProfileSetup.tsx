@@ -4,6 +4,8 @@ import { UserProfile, Language } from '../types';
 import { auth, db } from '../firebase';
 import { updatePassword, deleteUser } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
+import { getLevelInfo } from '../services/gamificationService';
+import LevelBadge from './ui/LevelBadge';
 
 interface ProfileSetupProps {
   profile: UserProfile;
@@ -79,8 +81,9 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
     <div className="flex-1 p-8 bg-surface-main overflow-y-auto">
       <h2 className="text-3xl font-bold mb-6 text-theme-text">Complete Your Profile</h2>
       <div className="space-y-6">
-        <div className="flex justify-center mb-4">
+        <div className="flex flex-col items-center mb-4 gap-2">
             <img src={profile.avatar} alt="Avatar" className="w-24 h-24 rounded-full border-4 border-[#00a884]" />
+            <LevelBadge level={getLevelInfo(profile.xp || 0)} size="md" showXP xp={profile.xp || 0} />
         </div>
         
         <div>

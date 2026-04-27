@@ -1,18 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { UserProfile } from '../types';
+import { UserProfile, QuestData } from '../types';
 import Avatar from './ui/Avatar';
+import LevelBadge from './ui/LevelBadge';
 import { checkAndUpdateStreak } from '../services/weeklyStreak';
-import { getDailyActiveSessions } from '../services/sessionService'; // New import
+import { getDailyActiveSessions } from '../services/sessionService';
+import { getLevelInfo, getOrResetDailyQuests } from '../services/gamificationService';
+import { db } from '../firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 interface DashboardProps {
   user: UserProfile;
   onLogout: () => void;
   onEditProfile: () => void;
+  onNavigateToProgress?: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) => {
+const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, onNavigateToProgress }) => {
   const [sessionSeconds, setSessionSeconds] = useState(0);
-  const [activeSessions, setActiveSessions] = useState(0); // New state
+  const [activeSessions, setActiveSessions] = useState(0);
+  const [xp, setXP] = useState(user.xp || 0);
+  const [questData, setQuestData] = useState<QuestData | null>(null);
 
   // 1. Live Timer for Display
   useEffect(() => {
@@ -43,7 +50,27 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
     };
   }, [user?.uid]);
 
+  // 4. Listen to real-time XP and quest changes
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'users', user.id), (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setXP(data.xp || 0);
+        if (data.questData) {
+          setQuestData(data.questData as QuestData);
+        }
+      }
+    });
+    return () => unsub();
+  }, [user.id]);
+
+  // Initialize quests
+  useEffect(() => {
+    getOrResetDailyQuests(user.id).then(setQuestData);
+  }, [user.id]);
+
   const totalHours = (sessionSeconds / 3600).toFixed(1);
+  const level = getLevelInfo(xp);
 
   // Stats now use the local 'activeSessions' state
   const stats = {
@@ -51,6 +78,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
     sessionsCount: activeSessions,
     streak: user.streakCount || 0,
   };
+
+  const completedQuests = questData?.quests.filter(q => q.progress >= q.target).length || 0;
+  const totalQuests = questData?.quests.length || 0;
+  const unclaimedQuests = questData?.quests.filter(q => q.progress >= q.target && !q.claimed).length || 0;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-surface-main">
@@ -60,6 +91,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
           <p className="text-xs text-theme-muted">Welcome back, {user.name}!</p>
         </div>
         <div className="flex items-center space-x-3">
+          <LevelBadge level={level} size="md" showXP xp={xp} />
           <button onClick={onEditProfile} className="p-2 text-theme-muted hover:text-[#00a884] transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -101,7 +133,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
         </div>
 
         {/* Small Stat Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border">
             <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Current Streak</p>
             <div className="flex items-center space-x-2">
@@ -116,6 +148,46 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
               <span className="text-xl">💬</span>
             </div>
           </div>
+
+          {/* XP Card */}
+          <div className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border">
+            <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Total XP</p>
+            <div className="flex items-center space-x-2">
+              <span className="text-2xl font-bold text-emerald-500">{xp}</span>
+              <span className="text-xl">⚡</span>
+            </div>
+            {level.nextThreshold !== null && (
+              <div className="mt-2">
+                <div className="w-full bg-surface-hover rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500"
+                    style={{ width: `${level.progress}%` }}
+                  />
+                </div>
+                <p className="text-[10px] text-theme-muted mt-1">{level.nextThreshold - xp} XP to next level</p>
+              </div>
+            )}
+          </div>
+
+          {/* Daily Quests Summary */}
+          <button
+            onClick={onNavigateToProgress}
+            className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border text-left hover:border-amber-500/30 transition-colors group"
+          >
+            <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Daily Quests</p>
+            <div className="flex items-center space-x-2">
+              <span className="text-2xl font-bold text-amber-500">{completedQuests}/{totalQuests}</span>
+              <span className="text-xl">📋</span>
+            </div>
+            {unclaimedQuests > 0 && (
+              <p className="text-[10px] text-amber-500 font-semibold mt-1 animate-pulse">
+                {unclaimedQuests} reward{unclaimedQuests > 1 ? 's' : ''} to claim!
+              </p>
+            )}
+            <p className="text-[10px] text-theme-muted mt-1 group-hover:text-[#00a884] transition-colors">
+              View Progress →
+            </p>
+          </button>
         </div>
 
         {/* Daily Activity (Bar Chart) */}

@@ -1,5 +1,6 @@
 import { db } from '../firebase'; // Ensure this points to your firebase config file
 import { doc, getDoc, updateDoc, increment } from "firebase/firestore";
+import { addXP } from './gamificationService';
 
 export const checkAndUpdateStreak = async (userId: string, startTime: number) => {
     const now = Date.now();
@@ -20,6 +21,8 @@ export const checkAndUpdateStreak = async (userId: string, startTime: number) =>
                     streakCount: increment(1),
                     lastStreakUpdate: today
                 });
+                // Gamification: award XP for daily login streak
+                addXP(userId, 'dailyLogin');
                 console.log("10 minutes reached! Streak updated.");
             }
         }

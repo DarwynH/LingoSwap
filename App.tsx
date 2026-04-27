@@ -13,6 +13,7 @@ import Sidebar, { TabType } from './components/Sidebar';
 import Landing from './components/Landing';
 import { onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 import SavedItemsView from './components/SavedItemsView';
+import ProgressView from './components/ProgressView';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { playMessageNotification } from './utils/notificationSound';
 
@@ -102,7 +103,8 @@ useEffect(() => {
             avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
             bio: '',
             nativeLanguage: Language.ENGLISH,
-            targetLanguage: Language.SPANISH
+            targetLanguage: Language.SPANISH,
+            xp: 0
           };
           setUser(newProfile);
           setView('setup');
@@ -479,7 +481,8 @@ useEffect(() => {
   const renderMainContent = () => {
     if (!user) return null;
     switch (activeTab) {
-      case 'dashboard': return <Dashboard user={user} onLogout={handleLogout} onEditProfile={() => setView('setup')} />;
+      case 'dashboard': return <Dashboard user={user} onLogout={handleLogout} onEditProfile={() => setView('setup')} onNavigateToProgress={() => setActiveTab('progress')} />;
+      case 'progress': return <ProgressView user={user} />;
       case 'partners': return <FindPartners user={user} onStartChat={handleStartChat} />;
       case 'chats': return <ChatsList user={user} onSelectChat={handleStartChat} />;
       case 'saved': return <SavedItemsView user={user} onJumpToMessage={handleJumpToMessage} />;
@@ -554,7 +557,7 @@ useEffect(() => {
               setActiveChatId(null);
               setJumpToMessageId(null);
             }
-          }} />
+          }} user={user} />
           <main className="flex-1 flex flex-col overflow-hidden">
             {/* Desktop: show embedded chat beside sidebar when a session is active */}
             {isDesktop && activeSession ? (
