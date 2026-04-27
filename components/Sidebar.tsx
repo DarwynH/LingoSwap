@@ -41,7 +41,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
   ];
 
   return (
-    <nav className="bg-[#1e293b] border-r border-gray-200 w-20 md:w-64 flex flex-col h-full z-20">
+    <nav className="bg-surface-card border-r border-theme-border w-20 md:w-64 flex flex-col h-full z-20">
       <div className="p-6 flex items-center space-x-3">
         <div className="w-100 h-100 rounded-lg overflow-hidden flex items-center justify-center">
           <img
@@ -50,7 +50,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
             className="w-full h-full object-contain"
           />
         </div>
-        <span className="hidden md:block font-bold text-xl text-gray-800">LingoSwap</span>
+        <span className="hidden md:block font-bold text-xl text-theme-text">LingoSwap</span>
       </div>
 
       <div className="flex-1 px-3 space-y-2 py-4">
@@ -60,8 +60,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
             onClick={() => onTabChange(tab.id)}
             className={`w-full flex items-center space-x-3 p-3 rounded-xl transition-all ${
               activeTab === tab.id
-              ? 'bg-[#334159] text-white'
-              : 'text-gray-500 hover:bg-[#334159]'
+              ? 'bg-[#00a884]/10 text-[#00a884]'
+              : 'text-theme-muted hover:bg-surface-hover hover:text-theme-text'
             }`}
           >
             {tab.icon}

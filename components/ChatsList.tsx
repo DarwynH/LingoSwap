@@ -28,13 +28,13 @@ const ChatsList: React.FC<ChatsListProps> = ({ user, onSelectChat }) => {
   }, [user.id]);
   
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#f8fafb]">
-      <header className="bg-white border-b border-gray-200 p-4">
-        <h1 className="text-xl font-bold text-gray-800">Your Conversations</h1>
+    <div className="flex-1 flex flex-col h-full bg-[#0f172a]">
+      <header className="bg-[#1e293b]/80 backdrop-blur-md border-b border-slate-700/50 p-4">
+        <h1 className="text-xl font-bold text-slate-100">Your Conversations</h1>
       </header>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-slate-800/50">
           {conversations.map((conv) => (
             <button
               key={conv.partnerId}
@@ -50,7 +50,7 @@ const ChatsList: React.FC<ChatsListProps> = ({ user, onSelectChat }) => {
 
                 onSelectChat(mockPartnerProfile, chatId);
               }}
-              className="w-full bg-white p-4 hover:bg-gray-50 flex items-center space-x-4 text-left"
+              className="w-full bg-transparent p-4 hover:bg-[#1e293b]/50 transition-colors flex items-center space-x-4 text-left"
             >
               <div className="relative">
                 <Avatar src={conv.partnerAvatar} />
@@ -60,14 +60,14 @@ const ChatsList: React.FC<ChatsListProps> = ({ user, onSelectChat }) => {
               
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline">
-                   <h4 className="font-bold text-gray-800">{conv.partnerName}</h4>
-                   <span className={`text-xs ${conv.unreadCount > 0 ? 'text-[#25d366] font-bold' : 'text-gray-400'}`}>
+                   <h4 className="font-bold text-slate-100">{conv.partnerName}</h4>
+                   <span className={`text-xs ${conv.unreadCount > 0 ? 'text-[#25d366] font-bold' : 'text-slate-500'}`}>
                      {new Date(conv.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                    </span>
                 </div>
                 
                 <div className="flex justify-between items-center mt-1">
-                   <p className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-gray-800' : 'text-gray-500'}`}>
+                   <p className={`text-sm truncate ${conv.unreadCount > 0 ? 'font-semibold text-white' : 'text-slate-400'}`}>
                      {conv.lastMessage}
                    </p>
                    
@@ -85,7 +85,7 @@ const ChatsList: React.FC<ChatsListProps> = ({ user, onSelectChat }) => {
 
         {conversations.length === 0 && (
           <div className="flex flex-col items-center justify-center p-12 text-center">
-            <h3 className="text-lg font-bold text-gray-700">No chats yet</h3>
+            <h3 className="text-lg font-bold text-slate-400">No chats yet</h3>
           </div>
         )}
       </div>

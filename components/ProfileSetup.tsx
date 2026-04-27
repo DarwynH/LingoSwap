@@ -12,6 +12,7 @@ interface ProfileSetupProps {
 
 const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
   const [name, setName] = useState(profile.name);
+  const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
   const [native, setNative] = useState<Language>(profile.nativeLanguage || Language.ENGLISH);
   const [target, setTarget] = useState<Language>(profile.targetLanguage || Language.SPANISH);
   const [bio, setBio] = useState(profile.bio || "");
@@ -62,19 +63,31 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
     });
   };
 
+  const toggleTheme = () => {
+    const nextTheme = !isDarkMode ? 'dark' : 'light';
+    setIsDarkMode(!isDarkMode);
+    if (nextTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  };
+
   return (
-    <div className="flex-1 p-8 bg-white overflow-y-auto">
-      <h2 className="text-3xl font-bold mb-6 text-gray-800">Complete Your Profile</h2>
+    <div className="flex-1 p-8 bg-surface-main overflow-y-auto">
+      <h2 className="text-3xl font-bold mb-6 text-theme-text">Complete Your Profile</h2>
       <div className="space-y-6">
         <div className="flex justify-center mb-4">
             <img src={profile.avatar} alt="Avatar" className="w-24 h-24 rounded-full border-4 border-[#00a884]" />
         </div>
         
         <div>
-          <label className="block text-sm font-medium text-gray-700">Display Name</label>
+          <label className="block text-sm font-medium text-theme-muted">Display Name</label>
           <input 
             type="text" 
-            className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00a884] focus:outline-none"
+            className="mt-1 w-full p-3 border border-theme-border rounded-lg bg-surface-card text-theme-text focus:ring-2 focus:ring-[#00a884] focus:outline-none"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
@@ -82,9 +95,9 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Native Language</label>
+            <label className="block text-sm font-medium text-theme-muted">Native Language</label>
             <select 
-              className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00a884] focus:outline-none bg-white"
+              className="mt-1 w-full p-3 border border-theme-border rounded-lg bg-surface-card text-theme-text focus:ring-2 focus:ring-[#00a884] focus:outline-none"
               value={native}
               onChange={(e) => setNative(e.target.value as Language)}
             >
@@ -94,9 +107,9 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700">Learning</label>
+            <label className="block text-sm font-medium text-theme-muted">Learning</label>
             <select 
-              className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00a884] focus:outline-none bg-white"
+              className="mt-1 w-full p-3 border border-theme-border rounded-lg bg-surface-card text-theme-text focus:ring-2 focus:ring-[#00a884] focus:outline-none"
               value={target}
               onChange={(e) => setTarget(e.target.value as Language)}
             >
@@ -108,10 +121,10 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Bio</label>
+          <label className="block text-sm font-medium text-theme-muted">Bio</label>
           <textarea 
             rows={3}
-            className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00a884] focus:outline-none"
+            className="mt-1 w-full p-3 border border-theme-border rounded-lg bg-surface-card text-theme-text focus:ring-2 focus:ring-[#00a884] focus:outline-none"
             placeholder="Tell us a bit about yourself..."
             value={bio}
             onChange={(e) => setBio(e.target.value)}
@@ -126,24 +139,40 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
           Save & Discover Partners
         </button>
 
-        <div className="pt-8 mt-4 border-t border-gray-200">
-          <h3 className="text-xl font-bold mb-4 text-gray-800">Account Management</h3>
+        <div className="pt-8 mt-4 border-t border-theme-border">
+          <h3 className="text-xl font-bold mb-4 text-theme-text">Preferences</h3>
+          
+          <div className="mb-6 p-4 border border-theme-border rounded-lg bg-surface-card flex items-center justify-between">
+            <div>
+              <h4 className="font-semibold text-theme-text">Dark Mode</h4>
+              <p className="text-sm text-theme-muted">Switch between light and dark themes</p>
+            </div>
+            <button 
+              type="button"
+              onClick={toggleTheme}
+              className={`w-12 h-6 rounded-full p-1 transition-colors ${isDarkMode ? 'bg-[#00a884]' : 'bg-gray-300'}`}
+            >
+              <div className={`w-4 h-4 bg-white rounded-full transition-transform ${isDarkMode ? 'translate-x-6' : 'translate-x-0'}`} />
+            </button>
+          </div>
+
+          <h3 className="text-xl font-bold mb-4 text-theme-text mt-8">Account Management</h3>
           
           {isPasswordUser && (
-            <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
-              <h4 className="font-semibold text-gray-700 mb-2">Change Password</h4>
+            <div className="mb-6 p-4 border border-theme-border rounded-lg bg-surface-card">
+              <h4 className="font-semibold text-theme-text mb-2">Change Password</h4>
               <div className="flex gap-2">
                 <input
                   type="password"
                   placeholder="New Password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00a884] focus:outline-none"
+                  className="flex-1 p-2 border border-theme-border bg-surface-main text-theme-text rounded-lg focus:ring-2 focus:ring-[#00a884] focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={handleChangePassword}
-                  className="bg-gray-800 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-700 transition-colors"
+                  className="bg-[#0f172a] dark:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium hover:bg-slate-800 dark:hover:bg-slate-600 transition-colors"
                 >
                   Update
                 </button>
@@ -151,9 +180,9 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
             </div>
           )}
 
-          <div className="p-4 border border-red-100 rounded-lg bg-red-50">
-            <h4 className="font-semibold text-red-700 mb-2">Danger Zone</h4>
-            <p className="text-sm text-red-600 mb-4">Once you delete your account, there is no going back. Please be certain.</p>
+          <div className="p-4 border border-red-900/30 dark:border-red-500/30 rounded-lg bg-red-50 dark:bg-red-900/10">
+            <h4 className="font-semibold text-red-700 dark:text-red-400 mb-2">Danger Zone</h4>
+            <p className="text-sm text-red-600 dark:text-red-300 mb-4">Once you delete your account, there is no going back. Please be certain.</p>
             <button
               type="button"
               onClick={handleDeleteAccount}

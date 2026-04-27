@@ -53,20 +53,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#0f172a]"> {/* Deep Slate Background */}
-      <header className="bg-[#1e293b] border-b border-slate-700 p-4 flex justify-between items-center">
+    <div className="flex-1 flex flex-col h-full bg-surface-main">
+      <header className="bg-surface-card border-b border-theme-border p-4 flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold text-white">Your Progress</h1>
-          <p className="text-xs text-gray-500">Welcome back, {user.name}!</p>
+          <h1 className="text-xl font-bold text-theme-text">Your Progress</h1>
+          <p className="text-xs text-theme-muted">Welcome back, {user.name}!</p>
         </div>
         <div className="flex items-center space-x-3">
-          <button onClick={onEditProfile} className="p-2 text-gray-400 hover:text-[#00a884] transition-colors">
+          <button onClick={onEditProfile} className="p-2 text-theme-muted hover:text-[#00a884] transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
-          <button onClick={onLogout} className="p-2 text-gray-400 hover:text-red-500 transition-colors">
+          <button onClick={onLogout} className="p-2 text-theme-muted hover:text-red-500 transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
@@ -102,15 +102,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
 
         {/* Small Stat Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <div className="bg-[#1b2b3f] p-6 rounded-2xl shadow-sm border border-[#1b2b3f]">
-            <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Current Streak</p>
+          <div className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border">
+            <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Current Streak</p>
             <div className="flex items-center space-x-2">
               <span className="text-2xl font-bold text-orange-500">{stats.streak} Days</span>
               <span className="text-xl">🔥</span>
             </div>
           </div>
-          <div className="bg-[#1b2b3f] p-6 rounded-2xl shadow-sm border border-[#1b2b3f]">
-            <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-1">Sessions</p>
+          <div className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border">
+            <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Sessions</p>
             <div className="flex items-center space-x-2">
               <span className="text-2xl font-bold text-blue-500">{stats.sessionsCount}</span>
               <span className="text-xl">💬</span>
@@ -119,10 +119,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
         </div>
 
         {/* Daily Activity (Bar Chart) */}
-        <div className="bg-[#1e293b]/50 border border-slate-800 p-6 rounded-3xl shadow-sm border border-gray-100 transition-all hover:shadow-md">
+        <div className="bg-surface-card/50 p-6 rounded-3xl shadow-sm border border-theme-border transition-all hover:shadow-md">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-slate-100">Weekly Activity</h3>
-            <span className="text-[10px] font-bold text-red bg-[#f0f0f0] px-2 py-1 rounded-full uppercase tracking-wider">
+            <h3 className="font-bold text-theme-text">Weekly Activity</h3>
+            <span className="text-[10px] font-bold text-red bg-surface-hover px-2 py-1 rounded-full uppercase tracking-wider">
               Live Tracking
             </span>
           </div>
@@ -147,7 +147,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile }) 
                     style={{ height: `${heightPercentage}%` }}
                   ></div>
 
-                  <span className={`text-[10px] mt-3 font-bold ${isToday ? 'text-white' : 'text-gray-400'}`}>
+                  <span className={`text-[10px] mt-3 font-bold ${isToday ? 'text-theme-text' : 'text-theme-muted'}`}>
                     {['S', 'M', 'T', 'W', 'T', 'F', 'S'][i]}
                   </span>
                 </div>
