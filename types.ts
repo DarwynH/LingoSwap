@@ -1,5 +1,6 @@
 // types.ts
 export enum Language {
+  SELECT = "Choose Language",
   ENGLISH = 'English',
   SPANISH = 'Spanish',
   FRENCH = 'French',
@@ -13,13 +14,13 @@ export enum Language {
 
 export interface UserProfile {
   id: string;
-  uid?: string; // Kept from your local
+  uid?: string;
   name: string;
-  streakCount?: number; // Kept from your local
-  dailyStats?: number[]; // Kept from your local
+  streakCount?: number; 
+  dailyStats?: number[]; 
   email: string;
-  nativeLanguage: Language;
-  targetLanguage: Language;
+  nativeLanguage: Language[];
+  targetLanguage: Language[];
   bio: string;
   lastMessageAt?: number; 
   avatar: string;

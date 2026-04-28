@@ -15,10 +15,15 @@ interface ProfileSetupProps {
 const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
   const [name, setName] = useState(profile.name);
   const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
-  const [native, setNative] = useState<Language>(profile.nativeLanguage || Language.ENGLISH);
-  const [target, setTarget] = useState<Language>(profile.targetLanguage || Language.SPANISH);
   const [bio, setBio] = useState(profile.bio || "");
   const [newPassword, setNewPassword] = useState("");
+
+  const [native, setNative] = useState<Language[]>(
+    Array.isArray(profile.nativeLanguage) ? profile.nativeLanguage : [Language.SELECT]
+  );
+  const [target, setTarget] = useState<Language[]>(
+    Array.isArray(profile.targetLanguage) ? profile.targetLanguage : [Language.SELECT]
+  );
 
   const isPasswordUser = auth.currentUser?.providerData.some(p => p.providerId === 'password');
 
@@ -37,6 +42,33 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
     }
   };
 
+  const addNative = () => setNative([...native, Language.SELECT]);
+  const addTarget = () => setTarget([...target, Language.SELECT]);
+
+  const updateNative = (index: number, lang: Language) => {
+    const newNative = [...native];
+    newNative[index] = lang;
+    setNative(newNative);
+  };
+
+  const updateTarget = (index: number, lang: Language) => {
+    const newTarget = [...target];
+    newTarget[index] = lang;
+    setTarget(newTarget);
+  };
+  
+  const removeLastNative = () => {
+    if (native.length > 1) {
+      setNative(native.slice(0, -1));
+    }
+  };
+
+  const removeLastTarget = () => {
+    if (target.length > 1) {
+      setTarget(target.slice(0, -1));
+    }
+  }; 
+
   const handleDeleteAccount = async () => {
     if (!auth.currentUser) return;
     const confirmed = window.confirm("Are you sure you want to delete your account? This action cannot be undone.");
@@ -54,8 +86,9 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
     }
   };
 
-  const handleSave = (e: React.MouseEvent) => {
-    e.preventDefault(); // Stop any default browser behavior
+  const handleSave = (e: React.MouseEvent) => 
+  {
+    e.preventDefault();
     onSave({
       ...profile,
       name,
@@ -87,7 +120,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
         </div>
         
         <div>
-          <label className="block text-sm font-medium text-theme-muted">Display Name</label>
+          <label className="block text-sm font-medium text-theme-muted">Name</label>
           <input 
             type="text" 
             className="mt-1 w-full p-3 border border-theme-border rounded-lg bg-surface-card text-theme-text focus:ring-2 focus:ring-[#00a884] focus:outline-none"
@@ -95,31 +128,89 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
             onChange={(e) => setName(e.target.value)}
           />
         </div>
+        
+        <div className="grid grid-cols-2 gap-8">
+          {/*Left*/}
+          <div className="space-y-4">
+            <label className="block text-sm font-medium text-gray-300">Native</label>
+            <div className="space-y-2">
+              {native.map((lang, index) => (
+                
+                <select
+                  key={`native-${index}`}
+                  value={lang}              
+                  className={`w-full p-2 bg-gray-800 rounded border border-gray-600 focus:outline-none 
+                    ${lang === Language.SELECT ? 'text-gray-500 italic' : 'text-white'}`}
+                  onChange={(e) => updateNative(index, e.target.value as Language)}
+                >
+                  {Object.values(Language)
+                    .filter((l) => l === Language.SELECT || l === lang || !native.includes(l))
+                    .map((l) => (
+                      <option
+                        key={l}
+                        value={l}
+                        disabled={l === Language.SELECT}
+                        className="bg-gray-800 text-white not-italic" // Reset style for the list
+                      >
+                        {l}
+                      </option>
+                    ))}
+                </select>
+              ))}
+            </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-theme-muted">Native Language</label>
-            <select 
-              className="mt-1 w-full p-3 border border-theme-border rounded-lg bg-surface-card text-theme-text focus:ring-2 focus:ring-[#00a884] focus:outline-none"
-              value={native}
-              onChange={(e) => setNative(e.target.value as Language)}
-            >
-              {Object.values(Language).map(lang => (
-                <option key={lang} value={lang}>{lang}</option>
-              ))}
-            </select>
+            <div className="flex justify-between items-center mt-2">
+              <button type="button" onClick={addNative} className="text-sm text-blue-400 hover:text-blue-300">
+                + Add Language
+              </button>
+              {native.length > 1 && (
+                <button type="button" onClick={removeLastNative} className="text-sm text-red-500 hover:text-red-400 italic">
+                  - Remove
+                </button>
+              )}
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-theme-muted">Learning</label>
-            <select 
-              className="mt-1 w-full p-3 border border-theme-border rounded-lg bg-surface-card text-theme-text focus:ring-2 focus:ring-[#00a884] focus:outline-none"
-              value={target}
-              onChange={(e) => setTarget(e.target.value as Language)}
-            >
-              {Object.values(Language).map(lang => (
-                <option key={lang} value={lang}>{lang}</option>
+
+          {/*Right*/}
+          <div className="space-y-4">
+            <label className="block text-sm font-medium text-gray-300">Target</label>
+            <div className="space-y-2">
+              {target.map((lang, index) => (
+                <select
+                  key={`target-${index}`}
+                  value={lang}
+                  /* 1. Add the dynamic template literal here */
+                  className={`w-full p-2 bg-gray-800 rounded border border-gray-600 focus:outline-none 
+                    ${lang === Language.SELECT ? 'text-gray-500 italic' : 'text-white'}`}
+                  onChange={(e) => updateTarget(index, e.target.value as Language)}
+                >
+                  {Object.values(Language)
+                    .filter((l) => l === Language.SELECT || l === lang || !target.includes(l))
+                    .map((l) => (
+                      <option
+                        key={l}
+                        value={l}
+                        disabled={l === Language.SELECT}
+                        /* 2. Reset the style for the actual list options */
+                        className="bg-gray-800 text-white not-italic"
+                      >
+                        {l}
+                      </option>
+                    ))}
+                </select>
               ))}
-            </select>
+            </div>
+
+            <div className="flex justify-between items-center mt-2">
+              <button type="button" onClick={addTarget} className="text-sm text-blue-400 hover:text-blue-300">
+                + Add Language
+              </button>
+              {target.length > 1 && (
+                <button type="button" onClick={removeLastTarget} className="text-sm text-red-500 hover:text-red-400 italic">
+                  - Remove
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
