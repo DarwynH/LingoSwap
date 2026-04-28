@@ -549,15 +549,21 @@ useEffect(() => {
       
       {view === 'main' && user && (
         <div className="flex flex-1 overflow-hidden h-full">
-          <Sidebar activeTab={activeTab} onTabChange={(tab) => {
-            setActiveTab(tab);
-            // On desktop, close the embedded chat when switching tabs
-            if (isDesktop && activeSession) {
-              setActiveSession(null);
-              setActiveChatId(null);
-              setJumpToMessageId(null);
-            }
-          }} user={user} />
+          <Sidebar 
+            activeTab={activeTab} 
+            onTabChange={(tab) => {
+              setActiveTab(tab);
+              // On desktop, close the embedded chat when switching tabs
+              if (isDesktop && activeSession) {
+                setActiveSession(null);
+                setActiveChatId(null);
+                setJumpToMessageId(null);
+              }
+            }} 
+            user={user}
+            onLogout={handleLogout}
+            onSettings={() => setView('setup')}
+          />
           <main className="flex-1 flex flex-col overflow-hidden">
             {/* Desktop: show embedded chat beside sidebar when a session is active */}
             {isDesktop && activeSession ? (

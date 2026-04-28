@@ -11,9 +11,24 @@ interface SidebarProps {
   onTabChange: (tab: TabType) => void;
   unreadCount?: number;
   user?: UserProfile;
+  onLogout?: () => void;
+  onSettings?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount = 0, user }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount = 0, user, onLogout, onSettings }) => {
+  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+
+  // Close menu when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   const tabs = [
     { id: 'dashboard' as TabType, label: 'Dashboard', icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -63,7 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
         <span className="hidden md:block font-bold text-xl text-theme-text">LingoSwap</span>
       </div>
 
-      <div className="flex-1 px-3 space-y-2 py-4">
+      <div className="flex-1 px-3 space-y-2 py-4 overflow-y-auto">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -84,18 +99,60 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
       {user && (() => {
         const level = getLevelInfo(user.xp || 0);
         return (
-          <div className="p-3 border-t border-theme-border">
-            <div className="flex items-center space-x-3 px-1">
+          <div className="p-3 border-t border-theme-border relative" ref={menuRef}>
+            {/* Account Menu Popover */}
+            {isMenuOpen && (
+              <div className="absolute bottom-full left-3 right-3 mb-2 bg-surface-card border border-theme-border rounded-2xl shadow-2xl overflow-hidden z-30 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                <div className="p-2 space-y-1">
+                  <button
+                    onClick={() => {
+                      onSettings?.();
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full flex items-center space-x-3 p-3 rounded-xl text-theme-text hover:bg-surface-hover transition-colors"
+                  >
+                    <svg className="w-5 h-5 text-theme-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="font-medium text-sm">Profile / Settings</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onLogout?.();
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full flex items-center space-x-3 p-3 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    <span className="font-medium text-sm">Sign Out</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className={`w-full flex items-center space-x-3 p-2 rounded-xl transition-all hover:bg-surface-hover ${isMenuOpen ? 'bg-surface-hover' : ''}`}
+            >
               <Avatar src={user.avatar} size="sm" online />
-              <div className="hidden md:block flex-1 min-w-0">
+              <div className="hidden md:block flex-1 min-w-0 text-left">
                 <p className="text-sm font-semibold text-theme-text truncate">{user.name}</p>
                 <LevelBadge level={level} size="sm" />
               </div>
-            </div>
-            {/* Collapsed sidebar: show badge below avatar */}
-            <div className="md:hidden mt-2 flex justify-center">
-              <LevelBadge level={level} size="sm" />
-            </div>
+              <svg className={`hidden md:block w-4 h-4 text-theme-muted transition-transform duration-200 ${isMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            </button>
+            
+            {/* Collapsed sidebar: show badge below avatar when menu is closed */}
+            {!isMenuOpen && (
+              <div className="md:hidden mt-1 flex justify-center pointer-events-none">
+                <LevelBadge level={level} size="sm" />
+              </div>
+            )}
           </div>
         );
       })()}
