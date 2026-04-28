@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
-import { translateTextToEnglish } from '../../services/translationService';
+import { translateText, getLanguageDisplayName, DEEPL_SELECTABLE_LANGUAGES } from '../../services/translationService';
 
 // NEW: Added props for Reply Feature
 interface ChatInputProps {
@@ -11,6 +11,10 @@ interface ChatInputProps {
   replyTarget?: { messageId: string; text: string; senderId: string; senderName: string } | null;
   onCancelReply?: () => void;
   currentUserId?: string;
+  /** DeepL target_lang code for draft translation (e.g. "EN-US", "JA"). Defaults to "EN-US". */
+  draftTranslationTarget?: string;
+  /** Callback when user manually changes the draft translation target language */
+  onDraftTargetChange?: (langCode: string) => void;
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({ 
@@ -20,13 +24,20 @@ const ChatInput: React.FC<ChatInputProps> = ({
   isUploading,
   replyTarget,
   onCancelReply,
-  currentUserId
+  currentUserId,
+  draftTranslationTarget = 'EN-US',
+  onDraftTargetChange
 }) => {
   const [inputText, setInputText] = useState('');
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false);
   const [translatedDraft, setTranslatedDraft] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const [selectedDraftVersion, setSelectedDraftVersion] = useState<'original' | 'translated'>('original');
+  const [showDraftLangPicker, setShowDraftLangPicker] = useState(false);
+  // Track which language the draft was actually translated to
+  const [draftTranslatedWithLang, setDraftTranslatedWithLang] = useState<string>(draftTranslationTarget);
+
+  const draftLangPickerRef = useRef<HTMLDivElement>(null);
 
   const { 
     isRecording, 
@@ -46,6 +57,18 @@ const ChatInput: React.FC<ChatInputProps> = ({
     return () => document.removeEventListener('click', handleClickOutside);
   }, [isAttachmentMenuOpen]);
 
+  // Close draft language picker on outside click
+  useEffect(() => {
+    if (!showDraftLangPicker) return;
+    const handleClick = (e: MouseEvent) => {
+      if (draftLangPickerRef.current && !draftLangPickerRef.current.contains(e.target as Node)) {
+        setShowDraftLangPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showDraftLangPicker]);
+
   const handleTextSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || isUploading || isTranslating) return;
@@ -60,12 +83,15 @@ const ChatInput: React.FC<ChatInputProps> = ({
     setSelectedDraftVersion('original');
   };
 
-  const handleTranslate = async () => {
+  const handleTranslate = async (targetLang?: string) => {
     if (!inputText.trim() || isTranslating) return;
+    const lang = targetLang || draftTranslationTarget;
     setIsTranslating(true);
+    setShowDraftLangPicker(false);
     try {
-      const translated = await translateTextToEnglish(inputText);
+      const translated = await translateText(inputText, lang);
       setTranslatedDraft(translated);
+      setDraftTranslatedWithLang(lang);
       setSelectedDraftVersion('translated');
     } catch (e) {
       console.error(e);
@@ -73,6 +99,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
     } finally {
       setIsTranslating(false);
     }
+  };
+
+  const handlePickDraftLanguage = (langCode: string) => {
+    if (onDraftTargetChange) {
+      onDraftTargetChange(langCode);
+    }
+    // Re-translate with new language
+    handleTranslate(langCode);
   };
 
   const handleCancelTranslation = () => {
@@ -155,23 +189,60 @@ const ChatInput: React.FC<ChatInputProps> = ({
               </button>
 
               {/* Translated Text Option */}
-              <button
-                type="button"
-                onClick={() => setSelectedDraftVersion('translated')}
-                className={`w-full text-left px-3 py-2 rounded-md transition-colors border relative overflow-hidden ${
-                  selectedDraftVersion === 'translated' 
-                    ? 'bg-emerald-600/10 border-emerald-500/50' 
-                    : 'bg-gray-800/50 border-gray-700 hover:bg-gray-700/50'
-                }`}
-              >
+              <div className={`w-full text-left rounded-md transition-colors border relative ${
+                selectedDraftVersion === 'translated' 
+                  ? 'bg-emerald-600/10 border-emerald-500/50' 
+                  : 'bg-gray-800/50 border-gray-700 hover:bg-gray-700/50'
+              }`}>
                 {selectedDraftVersion === 'translated' && (
-                  <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                  <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] rounded-l-md"></div>
                 )}
-                <div className="text-[11px] uppercase tracking-wider font-semibold opacity-70 mb-0.5 text-emerald-500/70">Translated to English</div>
-                <div className={`text-[14px] leading-snug ${selectedDraftVersion === 'translated' ? 'text-gray-100' : 'text-gray-400'}`}>
-                  {translatedDraft}
+                {/* Header row — label + Change button */}
+                <div className="flex items-center justify-between gap-2 px-3 pt-2 pb-1">
+                  <span className="text-[11px] uppercase tracking-wider font-semibold text-emerald-500/70 min-w-0 truncate">
+                    Translated to {getLanguageDisplayName(draftTranslatedWithLang)}
+                  </span>
+                  <div className="relative shrink-0" ref={draftLangPickerRef}>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setShowDraftLangPicker(!showDraftLangPicker); }}
+                      className="text-[11px] font-medium text-emerald-400/70 hover:text-emerald-300 px-2 py-1 rounded-md hover:bg-gray-700/80 transition-colors whitespace-nowrap"
+                      title="Change draft translation language"
+                    >
+                      ▾ Change
+                    </button>
+                    {showDraftLangPicker && (
+                      <div className="absolute z-50 bottom-full mb-1 right-0 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl py-1 max-h-56 overflow-y-auto">
+                        {DEEPL_SELECTABLE_LANGUAGES.map((lang) => (
+                          <button
+                            key={lang.code}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handlePickDraftLanguage(lang.code); }}
+                            className={`w-full text-left px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                              lang.code === draftTranslatedWithLang
+                                ? 'bg-emerald-600/20 text-emerald-300'
+                                : 'text-gray-300 hover:bg-gray-700'
+                            }`}
+                          >
+                            {lang.name}
+                            {lang.code === draftTranslatedWithLang && ' ✓'}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </button>
+                {/* Selectable translated text body */}
+                <button
+                  type="button"
+                  onClick={() => setSelectedDraftVersion('translated')}
+                  className="w-full text-left px-3 pb-2"
+                >
+                  <div className={`text-[14px] leading-snug ${selectedDraftVersion === 'translated' ? 'text-gray-100' : 'text-gray-400'}`}>
+                    {translatedDraft}
+                  </div>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -277,10 +348,10 @@ const ChatInput: React.FC<ChatInputProps> = ({
             {inputText.trim() && (
               <button
                 type="button"
-                onClick={handleTranslate}
+                onClick={() => handleTranslate()}
                 disabled={isTranslating || isUploading}
                 className="p-2 mr-1 text-gray-400 hover:text-emerald-400 disabled:opacity-50 transition-colors active:scale-95 flex items-center justify-center"
-                title="Translate to English"
+                title={`Translate to ${getLanguageDisplayName(draftTranslationTarget)}`}
               >
                 {isTranslating ? (
                   <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>

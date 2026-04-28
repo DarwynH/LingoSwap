@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '../../types';
-import { translateTextToEnglish } from '../../services/translationService'; 
+import { translateText, getLanguageDisplayName, DEEPL_SELECTABLE_LANGUAGES } from '../../services/translationService'; 
 import MessageTextRenderer from './MessageTextRenderer';
 import MediaLightbox from './MediaLightbox';
 
@@ -14,6 +14,10 @@ interface MessageBubbleProps {
   isStudyLater?: boolean;
   onReplyClick?: (messageId: string) => void;
   onWordClick?: (word: string, messageId: string, text: string) => void;
+  /** DeepL target_lang code for message translation (e.g. "EN-US", "JA"). Defaults to "EN-US". */
+  translationTargetLanguage?: string;
+  /** Callback when user manually changes the message translation target language */
+  onTranslationTargetChange?: (langCode: string) => void;
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({ 
@@ -25,28 +29,40 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   isPhrasebookSaved = false,
   isStudyLater = false,
   onReplyClick,
-  onWordClick
+  onWordClick,
+  translationTargetLanguage = 'EN-US',
+  onTranslationTargetChange
 }) => {
   const [showTranslation, setShowTranslation] = useState(false);
   const [translatedText, setTranslatedText] = useState<string | null>(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [showLangPicker, setShowLangPicker] = useState(false);
+  // Track which language was actually used for the cached translation
+  const [translatedWithLang, setTranslatedWithLang] = useState<string>(translationTargetLanguage);
 
-  const handleToggleTranslation = async () => {
-    if (showTranslation) {
-      setShowTranslation(false);
-      return;
-    }
-    if (translatedText) {
-      setShowTranslation(true);
-      return;
-    }
+  const langPickerRef = useRef<HTMLDivElement>(null);
+
+  // Close language picker on outside click
+  useEffect(() => {
+    if (!showLangPicker) return;
+    const handleClick = (e: MouseEvent) => {
+      if (langPickerRef.current && !langPickerRef.current.contains(e.target as Node)) {
+        setShowLangPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showLangPicker]);
+
+  const handleTranslate = async (targetLang: string) => {
     if (!message.text) return;
-
     setIsTranslating(true);
+    setShowLangPicker(false);
     try {
-      const result = await translateTextToEnglish(message.text);
+      const result = await translateText(message.text, targetLang);
       setTranslatedText(result);
+      setTranslatedWithLang(targetLang);
       setShowTranslation(true);
     } catch (error) {
       console.error("Failed to translate:", error);
@@ -54,6 +70,28 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     } finally {
       setIsTranslating(false);
     }
+  };
+
+  const handleToggleTranslation = async () => {
+    if (showTranslation) {
+      setShowTranslation(false);
+      return;
+    }
+    // If we have a cached translation for the current target, reuse it
+    if (translatedText && translatedWithLang === translationTargetLanguage) {
+      setShowTranslation(true);
+      return;
+    }
+    await handleTranslate(translationTargetLanguage);
+  };
+
+  const handlePickLanguage = (langCode: string) => {
+    // Notify parent so the choice persists across bubbles
+    if (onTranslationTargetChange) {
+      onTranslationTargetChange(langCode);
+    }
+    // Re-translate with new language (even if translation was cached for a different lang)
+    handleTranslate(langCode);
   };
 
   const formatBytes = (bytes: number = 0, decimals = 2) => {
@@ -149,6 +187,49 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       
       {showTranslation && translatedText && (
         <div className={`mt-2 pt-2 border-t ${dividerColor}`}>
+          <div className="flex items-center justify-between mb-1">
+            <p className={`text-[10.5px] font-semibold uppercase tracking-wider ${isMe ? 'text-blue-200/60' : 'text-gray-500'}`}>
+              Translated to {getLanguageDisplayName(translatedWithLang)}
+            </p>
+            {/* Inline language change button */}
+            <div className="relative" ref={langPickerRef}>
+              <button
+                type="button"
+                onClick={() => setShowLangPicker(!showLangPicker)}
+                className={`text-[10px] font-medium px-1.5 py-0.5 rounded transition-colors ${
+                  isMe 
+                    ? 'text-blue-200/70 hover:text-blue-100 hover:bg-blue-500/30' 
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-700'
+                }`}
+                title="Change translation language"
+              >
+                ▾ Change
+              </button>
+              {showLangPicker && (
+                <div className={`absolute z-50 mt-1 w-44 rounded-lg border shadow-xl py-1 max-h-52 overflow-y-auto ${
+                  isMe 
+                    ? 'right-0 bg-blue-800 border-blue-600/60'
+                    : 'right-0 bg-gray-800 border-gray-700'
+                }`}>
+                  {DEEPL_SELECTABLE_LANGUAGES.map((lang) => (
+                    <button
+                      key={lang.code}
+                      type="button"
+                      onClick={() => handlePickLanguage(lang.code)}
+                      className={`w-full text-left px-3 py-1.5 text-[12px] font-medium transition-colors ${
+                        lang.code === translatedWithLang
+                          ? (isMe ? 'bg-blue-600/50 text-white' : 'bg-gray-700 text-white')
+                          : (isMe ? 'text-blue-100 hover:bg-blue-700/60' : 'text-gray-300 hover:bg-gray-700')
+                      }`}
+                    >
+                      {lang.name}
+                      {lang.code === translatedWithLang && ' ✓'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <p className={`text-[14px] italic break-words leading-relaxed ${isMe ? 'text-blue-100' : 'text-gray-300'}`}>
             {translatedText}
           </p>

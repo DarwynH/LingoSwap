@@ -29,6 +29,7 @@ import ChatSearchBar from './Chat/ChatSearchBar';
 import AttachmentPreviewModal from './Chat/AttachmentPreviewModal';
 import { createPortal } from 'react-dom';
 import { recordActions } from '../services/gamificationService';
+import { resolveDeepLTarget } from '../services/translationService';
 
 interface ChatRoomProps {
   user: UserProfile;
@@ -117,6 +118,20 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
   // Mute / Block state
   const [isMuted, setIsMuted] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
+
+  // Translation target state — separate for message vs draft
+  // Message translation: help user understand received messages → default to native language
+  // Draft translation: help user prepare messages in learning language → default to target language
+  const [currentMessageTarget, setCurrentMessageTarget] = useState<string>(() =>
+    resolveDeepLTarget(
+      Array.isArray(user.nativeLanguage) ? user.nativeLanguage[0] : user.nativeLanguage
+    )
+  );
+  const [currentDraftTarget, setCurrentDraftTarget] = useState<string>(() =>
+    resolveDeepLTarget(
+      Array.isArray(user.targetLanguage) ? user.targetLanguage[0] : user.targetLanguage
+    )
+  );
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -981,6 +996,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
                     isStudyLater={isStudyLater}
                     onReplyClick={scrollToOriginalMessage}
                     onWordClick={handleWordClick}
+                    translationTargetLanguage={currentMessageTarget}
+                    onTranslationTargetChange={(lang) => setCurrentMessageTarget(lang)}
                   />
 
                   {!isMe && actionMenu}
@@ -1046,6 +1063,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
             replyTarget={replyTarget}
             onCancelReply={handleCancelReply}
             currentUserId={user.id}
+            draftTranslationTarget={currentDraftTarget}
+            onDraftTargetChange={(lang) => setCurrentDraftTarget(lang)}
           />
         </div>
       </div>

@@ -1,4 +1,5 @@
 import * as functions from 'firebase-functions/v2';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const db = getFirestore();
@@ -38,7 +39,7 @@ export const updatePresence = functions.https.onCall(async (request) => {
 });
 
 // Clean up stale connections (runs every 5 minutes)
-export const cleanupStaleConnections = functions.schedule('every 5 minutes').onRun(async () => {
+export const cleanupStaleConnections = onSchedule('every 5 minutes', async (event) => {
   const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
   
   const staleUsers = await db
@@ -58,5 +59,6 @@ export const cleanupStaleConnections = functions.schedule('every 5 minutes').onR
   await batch.commit();
   console.log(`Cleaned up ${staleUsers.size} stale connections`);
   
-  return null;
+  // The 'return null;' line has been removed. 
+  // An async function without a return statement implicitly returns a Promise<void>.
 });

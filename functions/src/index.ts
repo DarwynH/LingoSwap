@@ -12,11 +12,14 @@ export const translateMessage = onCall(async (request) => {
     );
   }
 
-  const { text } = request.data;
+  const { text, targetLang } = request.data;
   
   if (!text) {
     throw new HttpsError("invalid-argument", "Text to translate is required.");
   }
+
+  // Use client-provided target language, default to EN-US for backward compatibility
+  const resolvedTargetLang: string = targetLang || "EN-US";
 
   try {
     // NEW: Properly formatted DeepL API request
@@ -24,7 +27,7 @@ export const translateMessage = onCall(async (request) => {
       DEEPL_API_URL,
       {
         text: [text], // DeepL expects the text inside an array
-        target_lang: "EN-US",
+        target_lang: resolvedTargetLang,
       },
       {
         headers: {
