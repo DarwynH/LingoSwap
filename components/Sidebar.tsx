@@ -29,10 +29,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
   const tabs = [
     { id: 'dashboard' as TabType, label: 'Dashboard', icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012-2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
       </svg>
     )},
     { id: 'progress' as TabType, label: 'Progress', icon: (
@@ -57,7 +58,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
         )}
       </div>
     )},
-    // NEW: Added the Saved tab here
     { id: 'saved' as TabType, label: 'Saved', icon: (
       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
@@ -65,98 +65,127 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
     )},
   ];
 
-  return (
-    <nav className="bg-surface-card border-r border-theme-border w-20 md:w-64 flex flex-col h-full z-20">
-      <div className="p-6 flex items-center space-x-3">
-        <div className="w-100 h-100 rounded-lg overflow-hidden flex items-center justify-center">
-          <img
-            src="/ndhu_logo.png"
-            alt="LingoSwap Logo"
-            className="w-full h-full object-contain"
-          />
-        </div>
-        <span className="hidden md:block font-bold text-xl text-theme-text">LingoSwap</span>
+  // Helper component for the Popover Menu (Settings / Logout)
+  const ActionMenuPopover = ({ isMobile = false }) => (
+    <div className={`absolute ${isMobile ? 'bottom-full right-4 mb-4' : 'bottom-full left-3 right-3 mb-2'} w-48 md:w-auto bg-surface-card border border-theme-border rounded-2xl shadow-2xl overflow-hidden z-[60] animate-in fade-in slide-in-from-bottom-2 duration-200`}>
+      <div className="p-2 space-y-1">
+        <button
+          onClick={() => { onSettings?.(); setIsMenuOpen(false); }}
+          className="w-full flex items-center space-x-3 p-3 rounded-xl text-theme-text hover:bg-surface-hover transition-colors"
+        >
+          <svg className="w-5 h-5 text-theme-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span className="font-medium text-sm">Profile / Settings</span>
+        </button>
+        <button
+          onClick={() => { onLogout?.(); setIsMenuOpen(false); }}
+          className="w-full flex items-center space-x-3 p-3 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          <span className="font-medium text-sm">Sign Out</span>
+        </button>
       </div>
+    </div>
+  );
 
-      <div className="flex-1 px-3 space-y-2 py-4 overflow-y-auto">
+  return (
+    <>
+      {/* ======================= */}
+      {/* DESKTOP SIDEBAR (md+)   */}
+      {/* ======================= */}
+      <nav className="hidden md:flex bg-surface-card border-r border-theme-border w-64 flex-col h-full z-20">
+        <div className="p-6 flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center">
+            <img src="/ndhu_logo.png" alt="LingoSwap Logo" className="w-full h-full object-contain" />
+          </div>
+          <span className="font-bold text-xl text-theme-text">LingoSwap</span>
+        </div>
+
+        <div className="flex-1 px-3 space-y-2 py-4 overflow-y-auto">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => onTabChange(tab.id)}
+              className={`w-full flex items-center space-x-3 p-3 rounded-xl transition-all ${
+                activeTab === tab.id
+                ? 'bg-[#00a884]/10 text-[#00a884]'
+                : 'text-theme-muted hover:bg-surface-hover hover:text-theme-text'
+              }`}
+            >
+              {tab.icon}
+              <span className="font-medium">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* User Profile Footer (Desktop) */}
+        {user && (() => {
+          const level = getLevelInfo(user.xp || 0);
+          return (
+            <div className="p-3 border-t border-theme-border relative" ref={menuRef}>
+              {isMenuOpen && <ActionMenuPopover />}
+              <button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className={`w-full flex items-center space-x-3 p-2 rounded-xl transition-all hover:bg-surface-hover ${isMenuOpen ? 'bg-surface-hover' : ''}`}
+              >
+                <Avatar src={user.avatar} size="sm" online />
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-sm font-semibold text-theme-text truncate">{user.name}</p>
+                  <LevelBadge level={level} size="sm" />
+                </div>
+                <svg className={`w-4 h-4 text-theme-muted transition-transform duration-200 ${isMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
+              </button>
+            </div>
+          );
+        })()}
+      </nav>
+
+      {/* ======================= */}
+      {/* MOBILE BOTTOM NAV (<md) */}
+      {/* ======================= */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface-card border-t border-theme-border flex justify-between items-center h-[68px] px-1 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-1 z-[50]">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className={`w-full flex items-center space-x-3 p-3 rounded-xl transition-all ${
-              activeTab === tab.id
-              ? 'bg-[#00a884]/10 text-[#00a884]'
-              : 'text-theme-muted hover:bg-surface-hover hover:text-theme-text'
+            className={`flex-1 min-w-0 flex flex-col items-center justify-center p-1 transition-colors [&>div>svg]:w-5 [&>div>svg]:h-5 ${
+              activeTab === tab.id ? 'text-[#00a884]' : 'text-theme-muted hover:text-theme-text'
             }`}
           >
-            {tab.icon}
-            <span className="hidden md:block font-medium">{tab.label}</span>
+            <div className={`p-1 rounded-full transition-all ${activeTab === tab.id ? 'bg-[#00a884]/10 scale-110' : ''}`}>
+              {tab.icon}
+            </div>
+            <span className="text-[9px] font-medium mt-0.5 truncate w-full text-center px-0.5">
+              {tab.label}
+            </span>
           </button>
         ))}
-      </div>
 
-      {/* User Profile Footer */}
-      {user && (() => {
-        const level = getLevelInfo(user.xp || 0);
-        return (
-          <div className="p-3 border-t border-theme-border relative" ref={menuRef}>
-            {/* Account Menu Popover */}
-            {isMenuOpen && (
-              <div className="absolute bottom-full left-3 right-3 mb-2 bg-surface-card border border-theme-border rounded-2xl shadow-2xl overflow-hidden z-30 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                <div className="p-2 space-y-1">
-                  <button
-                    onClick={() => {
-                      onSettings?.();
-                      setIsMenuOpen(false);
-                    }}
-                    className="w-full flex items-center space-x-3 p-3 rounded-xl text-theme-text hover:bg-surface-hover transition-colors"
-                  >
-                    <svg className="w-5 h-5 text-theme-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span className="font-medium text-sm">Profile / Settings</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      onLogout?.();
-                      setIsMenuOpen(false);
-                    }}
-                    className="w-full flex items-center space-x-3 p-3 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    <span className="font-medium text-sm">Sign Out</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
+        {/* Mobile Profile Trigger */}
+        {user && (
+          <div className="relative flex-1 min-w-0 flex flex-col items-center justify-center" ref={menuRef}>
+            {isMenuOpen && <ActionMenuPopover isMobile={true} />}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className={`w-full flex items-center space-x-3 p-2 rounded-xl transition-all hover:bg-surface-hover ${isMenuOpen ? 'bg-surface-hover' : ''}`}
+              className="flex flex-col items-center justify-center p-1 transition-all w-full"
             >
-              <Avatar src={user.avatar} size="sm" online />
-              <div className="hidden md:block flex-1 min-w-0 text-left">
-                <p className="text-sm font-semibold text-theme-text truncate">{user.name}</p>
-                <LevelBadge level={level} size="sm" />
+              <div className={`p-[2px] rounded-full transition-shadow ${isMenuOpen ? 'ring-2 ring-[#00a884]' : ''}`}>
+                <Avatar src={user.avatar} size="sm" online />
               </div>
-              <svg className={`hidden md:block w-4 h-4 text-theme-muted transition-transform duration-200 ${isMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-              </svg>
+              <span className="text-[9px] font-medium text-theme-muted mt-0.5 truncate w-full text-center px-0.5">
+                Profile
+              </span>
             </button>
-            
-            {/* Collapsed sidebar: show badge below avatar when menu is closed */}
-            {!isMenuOpen && (
-              <div className="md:hidden mt-1 flex justify-center pointer-events-none">
-                <LevelBadge level={level} size="sm" />
-              </div>
-            )}
           </div>
-        );
-      })()}
-    </nav>
+        )}
+      </nav>
+    </>
   );
 };
 

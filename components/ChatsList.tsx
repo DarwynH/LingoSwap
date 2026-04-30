@@ -66,7 +66,8 @@ const ChatsList: React.FC<ChatsListProps> = ({ user, onSelectChat }) => {
         <p className="text-xs text-slate-400 mt-1">Chat with your language partners</p>
       </header>
 
-      <div className="flex-1 overflow-y-auto">
+      {/* FIXED SCROLLING ISSUE HERE: Added pb-24 md:pb-0 */}
+      <div className="flex-1 overflow-y-auto pb-24 md:pb-0">
         <div className="divide-y divide-slate-800/50">
           {conversations.map((conv) => {
             const presence = getPresenceDisplay(conv.partnerId);
