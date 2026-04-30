@@ -10,7 +10,6 @@ import LevelBadge from './ui/LevelBadge';
 interface ProfileSetupProps {
   profile: UserProfile;
   onSave: (updated: UserProfile) => void;
-  onLogout?: () => void;
 }
 
 const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
@@ -130,7 +129,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
           />
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+        <div className="grid grid-cols-2 gap-8">
           {/*Left*/}
           <div className="space-y-4">
             <label className="block text-sm font-medium text-gray-300">Native</label>
@@ -272,22 +271,6 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
                   Update
                 </button>
               </div>
-            </div>
-          )}
-
-          {onLogout && (
-            <div className="mb-6 p-4 border border-theme-border rounded-lg bg-surface-card flex items-center justify-between">
-              <div>
-                <h4 className="font-semibold text-theme-text">Session</h4>
-                <p className="text-sm text-theme-muted">Log out of your current session</p>
-              </div>
-              <button 
-                type="button"
-                onClick={onLogout}
-                className="bg-gray-800 text-red-500 border border-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-700 transition-colors"
-              >
-                Sign Out
-              </button>
             </div>
           )}
 
