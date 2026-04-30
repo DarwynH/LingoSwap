@@ -728,7 +728,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
 
       {/* Header */}
       <div className="flex-none bg-gray-900/80 backdrop-blur-xl border-b border-gray-800 shadow-sm z-20 flex justify-center">
-        <div className="w-full max-w-4xl px-4 pb-3.5 pt-[max(0.875rem,env(safe-area-inset-top))] flex items-center space-x-3">
+        <div className="w-full max-w-4xl px-2 md:px-4 pb-2.5 md:pb-3.5 pt-[max(0.75rem,env(safe-area-inset-top))] flex items-center space-x-2 md:space-x-3">
           <button onClick={onBack} className="p-2 -ml-2 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-full transition-all duration-200 active:scale-95">
             <svg className="w-[22px] h-[22px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
           </button>

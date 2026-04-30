@@ -16,6 +16,7 @@ import SavedItemsView from './components/SavedItemsView';
 import ProgressView from './components/ProgressView';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { playMessageNotification } from './utils/notificationSound';
+import BottomNav from './components/BottomNav';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -26,6 +27,7 @@ const App: React.FC = () => {
   const [selectedPartner, setSelectedPartner] = useState<UserProfile | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [jumpToMessageId, setJumpToMessageId] = useState<string | null>(null);
+  const [totalUnread, setTotalUnread] = useState<number>(0);
 
   // Desktop: ≥768px — keeps sidebar visible alongside chat
   const isDesktop = useMediaQuery('(min-width: 768px)');
@@ -208,6 +210,7 @@ useEffect(() => {
       }
 
       prevUnreadTotalRef.current = totalUnmutedUnread;
+      setTotalUnread(totalUnmutedUnread);
     });
 
     return () => unsub();
@@ -481,11 +484,12 @@ useEffect(() => {
   const renderMainContent = () => {
     if (!user) return null;
     switch (activeTab) {
-      case 'dashboard': return <Dashboard user={user} onLogout={handleLogout} onEditProfile={() => setView('setup')} onNavigateToProgress={() => setActiveTab('progress')} />;
+      case 'dashboard': return <Dashboard user={user} onLogout={handleLogout} onEditProfile={() => setActiveTab('profile')} onNavigateToProgress={() => setActiveTab('progress')} />;
       case 'progress': return <ProgressView user={user} />;
       case 'partners': return <FindPartners user={user} onStartChat={handleStartChat} />;
       case 'chats': return <ChatsList user={user} onSelectChat={handleStartChat} />;
       case 'saved': return <SavedItemsView user={user} onJumpToMessage={handleJumpToMessage} />;
+      case 'profile': return <ProfileSetup profile={user} onSave={handleProfileSave} onLogout={handleLogout} />;
       default: return null;
     }
   };
@@ -545,7 +549,7 @@ useEffect(() => {
 
       {view === 'landing' && <Landing onNavigateToAuth={(isLogin) => { setAuthMode(isLogin); setView('auth'); }} />}
       {view === 'auth' && <Auth key={authMode ? 'login' : 'signup'} initialIsLogin={authMode} onLogin={handleLogin} onBack={() => setView('landing')} />}
-      {view === 'setup' && user && <ProfileSetup profile={user} onSave={handleProfileSave} />}
+      {view === 'setup' && user && <ProfileSetup profile={user} onSave={handleProfileSave} onLogout={handleLogout} />}
       
       {view === 'main' && user && (
         <div className="flex flex-1 overflow-hidden h-full">
@@ -562,9 +566,10 @@ useEffect(() => {
             }} 
             user={user}
             onLogout={handleLogout}
-            onSettings={() => setView('setup')}
+            onSettings={() => setActiveTab('profile')}
+            unreadCount={totalUnread}
           />
-          <main className="flex-1 flex flex-col overflow-hidden">
+          <main className="flex-1 flex flex-col overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
             {/* Desktop: show embedded chat beside sidebar when a session is active */}
             {isDesktop && activeSession ? (
               <ChatRoom
@@ -589,6 +594,14 @@ useEffect(() => {
               renderMainContent()
             )}
           </main>
+          {/* Mobile Bottom Navigation */}
+          {!isDesktop && (
+            <BottomNav 
+              activeTab={activeTab} 
+              onTabChange={setActiveTab} 
+              unreadCount={totalUnread}
+            />
+          )}
         </div>
       )}
 

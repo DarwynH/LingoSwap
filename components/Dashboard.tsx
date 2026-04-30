@@ -97,13 +97,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
 
       <div className="p-6 space-y-6 overflow-y-auto">
         {/* Main Stat Card - Midnight Blue Theme */}
-        <div className="bg-[#162b58] rounded-3xl p-8 text-white shadow-xl relative overflow-hidden transition-transform hover:scale-[1.01]">
+        <div className="bg-[#162b58] rounded-3xl p-6 md:p-8 text-white shadow-xl relative overflow-hidden transition-transform hover:scale-[1.01]">
           <div className="relative z-10">
             <p className="text-blue-100 text-sm font-semibold uppercase tracking-widest mb-2 opacity-80">
               Practice Time
             </p>
             <div className="flex items-baseline space-x-2">
-              <h2 className="text-6xl font-black tracking-tight">{totalHours}</h2>
+              <h2 className="text-5xl md:text-6xl font-black tracking-tight">{totalHours}</h2>
               <span className="text-2xl font-bold text-blue-100">Hours</span>
             </div>
             <p className="mt-4 text-sm text-blue-50 font-medium max-w-xs leading-relaxed">
@@ -121,15 +121,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
         </div>
 
         {/* Small Stat Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+          <div className="bg-surface-card p-4 md:p-6 rounded-2xl shadow-sm border border-theme-border">
             <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Current Streak</p>
             <div className="flex items-center space-x-2">
               <span className="text-2xl font-bold text-orange-500">{stats.streak} Days</span>
               <span className="text-xl">🔥</span>
             </div>
           </div>
-          <div className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border">
+          <div className="bg-surface-card p-4 md:p-6 rounded-2xl shadow-sm border border-theme-border">
             <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Sessions</p>
             <div className="flex items-center space-x-2">
               <span className="text-2xl font-bold text-blue-500">{stats.sessionsCount}</span>
@@ -138,7 +138,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
           </div>
 
           {/* XP Card */}
-          <div className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border">
+          <div className="bg-surface-card p-4 md:p-6 rounded-2xl shadow-sm border border-theme-border">
             <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Total XP</p>
             <div className="flex items-center space-x-2">
               <span className="text-2xl font-bold text-emerald-500">{xp}</span>
@@ -160,7 +160,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
           {/* Daily Quests Summary */}
           <button
             onClick={onNavigateToProgress}
-            className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border text-left hover:border-amber-500/30 transition-colors group"
+            className="bg-surface-card p-4 md:p-6 rounded-2xl shadow-sm border border-theme-border text-left hover:border-amber-500/30 transition-colors group"
           >
             <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Daily Quests</p>
             <div className="flex items-center space-x-2">

@@ -4,7 +4,7 @@ import { getLevelInfo } from '../services/gamificationService';
 import LevelBadge from './ui/LevelBadge';
 import Avatar from './ui/Avatar';
 
-export type TabType = 'dashboard' | 'progress' | 'partners' | 'chats' | 'saved';
+export type TabType = 'dashboard' | 'progress' | 'partners' | 'chats' | 'saved' | 'profile';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -63,10 +63,15 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
       </svg>
     )},
+    { id: 'profile' as TabType, label: 'Profile', icon: (
+      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+      </svg>
+    )},
   ];
 
   return (
-    <nav className="bg-surface-card border-r border-theme-border w-20 md:w-64 flex flex-col h-full z-20">
+    <nav className="hidden md:flex bg-surface-card border-r border-theme-border w-64 flex-col h-full z-20">
       <div className="p-6 flex items-center space-x-3">
         <div className="w-100 h-100 rounded-lg overflow-hidden flex items-center justify-center">
           <img
