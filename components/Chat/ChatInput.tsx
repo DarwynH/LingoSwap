@@ -122,23 +122,23 @@ const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   return (
-    <div className="w-full max-w-full overflow-hidden flex flex-col bg-gray-900 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div className="w-full max-w-full overflow-visible flex flex-col bg-surface-main pb-[max(1rem,env(safe-area-inset-bottom))]">
       
       {/* NEW: Compact Reply Preview Banner */}
       {replyTarget && (
         <div className="px-3 pt-2 pb-1 animate-chat-msg">
-          <div className="flex items-center justify-between bg-gray-800/80 border-l-4 border-blue-500 p-2.5 rounded-lg shadow-sm">
+          <div className="flex items-center justify-between bg-surface-card/80 border-l-4 border-blue-500 p-2.5 rounded-lg shadow-sm">
             <div className="flex flex-col overflow-hidden mr-3 flex-1">
               <span className="text-[12px] text-blue-400 font-semibold mb-0.5 tracking-wide">
                 {replyTarget.senderId === currentUserId ? 'Replying to yourself' : `Replying to ${replyTarget.senderName}`}
               </span>
-              <span className="text-[13px] text-gray-300 truncate">
+              <span className="text-[13px] text-theme-text truncate">
                 {replyTarget.text}
               </span>
             </div>
             <button 
               onClick={onCancelReply} 
-              className="p-1.5 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded-full transition-colors active:scale-95"
+              className="p-1.5 text-theme-muted hover:text-theme-text hover:bg-surface-hover rounded-full transition-colors active:scale-95"
               title="Cancel reply"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -152,16 +152,16 @@ const ChatInput: React.FC<ChatInputProps> = ({
       {/* NEW: Translation Draft Banner */}
       {translatedDraft && (
         <div className="px-3 pt-2 pb-1 animate-chat-msg">
-          <div className="flex flex-col bg-gray-800/80 border border-gray-700 p-2.5 rounded-lg shadow-sm">
+          <div className="flex flex-col bg-surface-card/80 border border-theme-border p-2.5 rounded-lg shadow-sm">
             <div className="flex justify-between items-start mb-2.5">
-              <span className="text-[12px] text-gray-300 font-semibold tracking-wide flex items-center">
+              <span className="text-[12px] text-theme-text font-semibold tracking-wide flex items-center">
                 <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 15h4.498" /></svg>
                 Preview Mode
               </span>
               <button 
                 type="button"
                 onClick={handleCancelTranslation} 
-                className="p-1 text-gray-400 hover:text-gray-200 hover:bg-gray-700 rounded-full transition-colors active:scale-95"
+                className="p-1 text-theme-muted hover:text-theme-text hover:bg-surface-hover rounded-full transition-colors active:scale-95"
                 title="Cancel translation"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -176,14 +176,14 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 className={`w-full text-left px-3 py-2 rounded-md transition-colors border relative overflow-hidden ${
                   selectedDraftVersion === 'original' 
                     ? 'bg-blue-600/10 border-blue-500/50' 
-                    : 'bg-gray-800/50 border-gray-700 hover:bg-gray-700/50'
+                    : 'bg-surface-card/50 border-theme-border hover:bg-surface-hover/50'
                 }`}
               >
                 {selectedDraftVersion === 'original' && (
                   <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></div>
                 )}
-                <div className="text-[11px] uppercase tracking-wider font-semibold opacity-70 mb-0.5 text-gray-400">Original</div>
-                <div className={`text-[14px] leading-snug ${selectedDraftVersion === 'original' ? 'text-gray-100' : 'text-gray-400'}`}>
+                <div className="text-[11px] uppercase tracking-wider font-semibold opacity-70 mb-0.5 text-theme-muted">Original</div>
+                <div className={`text-[14px] leading-snug ${selectedDraftVersion === 'original' ? 'text-theme-text' : 'text-theme-muted'}`}>
                   {inputText}
                 </div>
               </button>
@@ -192,7 +192,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
               <div className={`w-full text-left rounded-md transition-colors border relative ${
                 selectedDraftVersion === 'translated' 
                   ? 'bg-emerald-600/10 border-emerald-500/50' 
-                  : 'bg-gray-800/50 border-gray-700 hover:bg-gray-700/50'
+                  : 'bg-surface-card/50 border-theme-border hover:bg-surface-hover/50'
               }`}>
                 {selectedDraftVersion === 'translated' && (
                   <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] rounded-l-md"></div>
@@ -206,13 +206,13 @@ const ChatInput: React.FC<ChatInputProps> = ({
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); setShowDraftLangPicker(!showDraftLangPicker); }}
-                      className="text-[11px] font-medium text-emerald-400/70 hover:text-emerald-300 px-2 py-1 rounded-md hover:bg-gray-700/80 transition-colors whitespace-nowrap"
+                      className="text-[11px] font-medium text-emerald-400/70 hover:text-emerald-300 px-2 py-1 rounded-md hover:bg-surface-hover/80 transition-colors whitespace-nowrap"
                       title="Change draft translation language"
                     >
                       ▾ Change
                     </button>
                     {showDraftLangPicker && (
-                      <div className="absolute z-50 bottom-full mb-1 right-0 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl py-1 max-h-56 overflow-y-auto">
+                      <div className="absolute z-50 bottom-full mb-1 right-0 w-48 bg-surface-card border border-theme-border rounded-lg shadow-2xl py-1 max-h-56 overflow-y-auto">
                         {DEEPL_SELECTABLE_LANGUAGES.map((lang) => (
                           <button
                             key={lang.code}
@@ -221,7 +221,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                             className={`w-full text-left px-3 py-1.5 text-[12px] font-medium transition-colors ${
                               lang.code === draftTranslatedWithLang
                                 ? 'bg-emerald-600/20 text-emerald-300'
-                                : 'text-gray-300 hover:bg-gray-700'
+                                : 'text-theme-text hover:bg-surface-hover'
                             }`}
                           >
                             {lang.name}
@@ -238,7 +238,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   onClick={() => setSelectedDraftVersion('translated')}
                   className="w-full text-left px-3 pb-2"
                 >
-                  <div className={`text-[14px] leading-snug ${selectedDraftVersion === 'translated' ? 'text-gray-100' : 'text-gray-400'}`}>
+                  <div className={`text-[14px] leading-snug ${selectedDraftVersion === 'translated' ? 'text-theme-text' : 'text-theme-muted'}`}>
                     {translatedDraft}
                   </div>
                 </button>
@@ -249,21 +249,21 @@ const ChatInput: React.FC<ChatInputProps> = ({
       )}
 
       {/* Main Input Row */}
-      <div className="w-full max-w-full overflow-hidden px-3 pt-2 flex items-end space-x-2">
+      <div className="w-full max-w-full overflow-visible px-3 pt-2 flex items-end space-x-2">
         {/* Attachment Button & Popover Menu Container */}
         {!isRecording && (
           <div 
-            className="relative flex-shrink-0 mb-0.5 group"
+            className="relative flex-shrink-0 mb-0.5"
             onClick={(e) => {
               e.stopPropagation();
               setIsAttachmentMenuOpen(!isAttachmentMenuOpen);
             }}
           >
             {/* Popover Menu */}
-            <div className={`absolute bottom-full left-0 mb-3 w-52 bg-gray-800 border border-gray-700/80 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.5)] p-1.5 z-50 transition-all duration-200 origin-bottom-left ${
+            <div className={`absolute bottom-full left-0 mb-3 w-52 bg-surface-card border border-theme-border/80 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.5)] p-1.5 z-[9999] transition-all duration-200 origin-bottom-left ${
               isAttachmentMenuOpen 
-                ? 'opacity-100 visible translate-y-0' 
-                : 'opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0'
+                ? 'opacity-100 visible translate-y-0 pointer-events-auto' 
+                : 'opacity-0 invisible translate-y-2 pointer-events-none'
             }`}>
               <button 
                 type="button"
@@ -272,7 +272,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   onTriggerFileSelect('media'); 
                   setIsAttachmentMenuOpen(false); 
                 }}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-700/80 text-gray-200 hover:text-white transition-colors"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-surface-hover/80 text-theme-text hover:text-white transition-colors"
               >
                 <div className="flex items-center justify-center p-1.5 bg-blue-500/10 text-blue-400 rounded-md">
                   <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -289,7 +289,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                   onTriggerFileSelect('file'); 
                   setIsAttachmentMenuOpen(false); 
                 }}
-                className="w-full flex items-center gap-3 px-3 py-2 mt-0.5 rounded-lg hover:bg-gray-700/80 text-gray-200 hover:text-white transition-colors"
+                className="w-full flex items-center gap-3 px-3 py-2 mt-0.5 rounded-lg hover:bg-surface-hover/80 text-theme-text hover:text-white transition-colors"
               >
                 <div className="flex items-center justify-center p-1.5 bg-purple-500/10 text-purple-400 rounded-md">
                   <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -305,11 +305,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
               type="button" 
               disabled={isUploading}
               className={`p-2 flex-shrink-0 rounded-full transition-all duration-200 active:scale-[0.92] disabled:opacity-50 ${
-                isAttachmentMenuOpen ? 'bg-gray-800 text-gray-200' : 'text-gray-400 hover:text-gray-200 group-hover:bg-gray-800 group-hover:text-gray-200'
+                isAttachmentMenuOpen ? 'bg-surface-card text-theme-text' : 'text-theme-muted hover:text-theme-text hover:bg-surface-card'
               }`}
               title="Attach"
             >
-              <svg className={`w-6 h-6 transition-transform duration-200 ${isAttachmentMenuOpen ? 'rotate-45' : 'group-hover:rotate-45'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className={`w-6 h-6 transition-transform duration-200 ${isAttachmentMenuOpen ? 'rotate-45' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.1} d="M12 4v16m8-8H4" />
               </svg>
             </button>
@@ -334,11 +334,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
         ) : (
           <form
             onSubmit={handleTextSubmit}
-            className="flex-1 min-w-0 flex items-center bg-gray-800 rounded-3xl border border-transparent focus-within:border-gray-700 focus-within:bg-gray-800 focus-within:ring-2 focus-within:ring-gray-700 transition-all duration-300 ease-out mb-0.5"
+            className="flex-1 min-w-0 flex items-center bg-surface-card rounded-3xl border border-transparent focus-within:border-theme-border focus-within:bg-surface-card focus-within:ring-2 focus-within:ring-theme-border transition-all duration-300 ease-out mb-0.5"
           >
             <input
               type="text"
-              className="flex-1 min-w-0 bg-transparent border-none pl-4 pr-1 py-2 text-base text-gray-100 focus:outline-none placeholder-gray-500"
+              className="flex-1 min-w-0 bg-transparent border-none pl-4 pr-1 py-2 text-base text-theme-text focus:outline-none placeholder-theme-muted"
               placeholder="Message"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
@@ -350,7 +350,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
                 type="button"
                 onClick={() => handleTranslate()}
                 disabled={isTranslating || isUploading}
-                className="p-2 mr-1 text-gray-400 hover:text-emerald-400 disabled:opacity-50 transition-colors active:scale-95 flex items-center justify-center"
+                className="p-2 mr-1 text-theme-muted hover:text-emerald-400 disabled:opacity-50 transition-colors active:scale-95 flex items-center justify-center"
                 title={`Translate to ${getLanguageDisplayName(draftTranslationTarget)}`}
               >
                 {isTranslating ? (

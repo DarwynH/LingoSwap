@@ -231,9 +231,14 @@ const App: React.FC = () => {
     setActiveSession(session);
     setSelectedPartner(partner);
     setActiveChatId(chatId);
-    // On desktop, keep 'main' view so sidebar stays visible
+    // On desktop, switch to 'chats' tab so the 3-column layout opens
     // On mobile, switch to full-screen 'chat' view as before
-    setView(isDesktop ? 'main' : 'chat');
+    if (isDesktop) {
+      setActiveTab('chats');
+      setView('main');
+    } else {
+      setView('chat');
+    }
   };
 
   const handleJumpToMessage = async (chatId: string, messageId: string) => {
@@ -507,7 +512,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 w-full flex flex-col max-w-6xl mx-auto bg-gray-900 shadow-xl overflow-hidden overscroll-none touch-manipulation">
+    <div className="fixed inset-0 w-full flex flex-col bg-surface-main shadow-xl overflow-hidden overscroll-none touch-manipulation">
       <style>{`
         @keyframes slideInDown {
           0% { opacity: 0; transform: translateY(-20px); }
@@ -521,14 +526,14 @@ const App: React.FC = () => {
       {/* Incoming Call Overlay */}
       {incomingCall && view !== 'call' && (
         <div className="absolute top-4 left-4 right-4 md:left-auto md:right-6 md:w-96 z-[100] animate-call-popup">
-          <div className="bg-gray-900 border border-gray-700/50 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl p-4 flex items-center space-x-4 backdrop-blur-xl">
+          <div className="bg-surface-main border border-theme-border/50 shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-2xl p-4 flex items-center space-x-4 backdrop-blur-xl">
             <div className="relative flex-shrink-0">
-              <img src={incomingCall.callerAvatar} alt="caller" className="w-14 h-14 rounded-full object-cover border border-gray-700" />
-              <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#25d366] border-2 border-gray-900 rounded-full animate-pulse"></span>
+              <img src={incomingCall.callerAvatar} alt="caller" className="w-14 h-14 rounded-full object-cover border border-theme-border" />
+              <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#25d366] border-2 border-surface-main rounded-full animate-pulse"></span>
             </div>
             
             <div className="flex-1 min-w-0">
-              <h4 className="font-bold text-gray-100 text-base truncate">{incomingCall.callerName}</h4>
+              <h4 className="font-bold text-theme-text text-base truncate">{incomingCall.callerName}</h4>
               <p className="text-sm text-[#25d366] font-medium flex items-center gap-1.5 mt-0.5">
                 {incomingCall.type === 'video' ? (
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
@@ -564,13 +569,14 @@ const App: React.FC = () => {
       {view === 'setup' && user && <ProfileSetup profile={user} onSave={handleProfileSave} />}
       
       {view === 'main' && user && (
-        <div className="flex flex-1 overflow-hidden h-full w-full">
+        <div className="flex flex-1 overflow-hidden h-full w-full bg-surface-main">
           <Sidebar 
             activeTab={activeTab} 
             onTabChange={(tab) => {
               setActiveTab(tab);
-              // On desktop, close the embedded chat when switching tabs
-              if (isDesktop && activeSession) {
+              // Do NOT close chat session when changing tabs on desktop, 
+              // because we have 3 columns and chat can remain active.
+              if (!isDesktop && activeSession) {
                 setActiveSession(null);
                 setActiveChatId(null);
                 setJumpToMessageId(null);
@@ -580,31 +586,57 @@ const App: React.FC = () => {
             onLogout={handleLogout}
             onSettings={() => setView('setup')}
           />
-          <main className="flex-1 flex flex-col overflow-hidden">
-            {/* Desktop: show embedded chat beside sidebar when a session is active */}
-            {isDesktop && activeSession ? (
-              <ChatRoom
-                user={user}
-                session={activeSession}
-                isEmbedded
-                onBack={() => {
-                  setActiveSession(null);
-                  setActiveChatId(null);
-                  setJumpToMessageId(null);
-                }}
-                onDeleteChat={() => {
-                  setActiveSession(null);
-                  setActiveChatId(null);
-                  setJumpToMessageId(null);
-                }}
-                onCall={(partnerId, type) => handleStartCall(activeSession.partner, undefined, type)}
-                jumpToMessageId={jumpToMessageId}
-                onJumpComplete={() => setJumpToMessageId(null)}
-              />
-            ) : (
-              renderMainContent()
-            )}
-          </main>
+          {/* Middle column on desktop for chats, Full width otherwise */}
+          <div className={`${isDesktop && activeTab === 'chats' ? 'w-[350px] min-w-[350px] border-r border-theme-border/50 flex-col flex h-full z-10 shadow-lg' : 'flex-1 flex flex-col overflow-hidden'}`}>
+            {renderMainContent()}
+          </div>
+          
+          {/* Right column (desktop only, chats tab only) */}
+          {isDesktop && activeTab === 'chats' && (
+            <main className="flex-1 flex flex-col overflow-hidden relative">
+              {activeSession ? (
+                <ChatRoom
+                  user={user}
+                  session={activeSession}
+                  isEmbedded
+                  onBack={() => {
+                    setActiveSession(null);
+                    setActiveChatId(null);
+                    setJumpToMessageId(null);
+                  }}
+                  onDeleteChat={() => {
+                    setActiveSession(null);
+                    setActiveChatId(null);
+                    setJumpToMessageId(null);
+                  }}
+                  onCall={(partnerId, type) => handleStartCall(activeSession.partner, undefined, type)}
+                  jumpToMessageId={jumpToMessageId}
+                  onJumpComplete={() => setJumpToMessageId(null)}
+                />
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-surface-main relative overflow-hidden">
+                  {/* Subtle background pattern/logo */}
+                  <div className="absolute inset-0 opacity-5 pointer-events-none flex items-center justify-center">
+                    <img src="/ndhu_logo.png" alt="Background" className="w-96 h-96 object-contain grayscale blur-[2px]" />
+                  </div>
+                  
+                  <div className="relative z-10 max-w-md">
+                    <div className="w-24 h-24 mb-6 mx-auto rounded-full bg-surface-card flex items-center justify-center shadow-inner border border-theme-border/50">
+                      <img src="/ndhu_logo.png" alt="LingoSwap" className="w-14 h-14 object-contain" />
+                    </div>
+                    <h2 className="text-2xl font-light text-theme-text mb-3 tracking-wide">LingoSwap <span className="font-semibold text-theme-text">Web</span></h2>
+                    <p className="text-theme-muted leading-relaxed text-sm">
+                      Select a conversation from the chat list, or discover new partners to start a language exchange.
+                    </p>
+                    <div className="mt-8 pt-6 border-t border-theme-border/50 text-xs text-theme-muted flex items-center justify-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      End-to-end translation enabled
+                    </div>
+                  </div>
+                </div>
+              )}
+            </main>
+          )}
         </div>
       )}
 

@@ -72,7 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
 
   // Helper component for the Popover Menu (Settings / Logout)
   const ActionMenuPopover = ({ isMobile = false }) => (
-    <div className={`absolute ${isMobile ? 'bottom-full right-4 mb-4' : 'bottom-full left-3 right-3 mb-2'} w-48 md:w-auto bg-surface-card border border-theme-border rounded-2xl shadow-2xl overflow-hidden z-[60] animate-in fade-in slide-in-from-bottom-2 duration-200`}>
+    <div className={`absolute ${isMobile ? 'bottom-full right-4 mb-4' : 'bottom-full left-3 mb-2 w-56'} bg-surface-card border border-theme-border rounded-2xl shadow-2xl overflow-hidden z-[60] animate-in fade-in slide-in-from-bottom-2 duration-200`}>
       <div className="p-2 space-y-1">
         <button
           type="button"
@@ -101,30 +101,29 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
 
   return (
     <>
-      {/* ======================= */}
-      {/* DESKTOP SIDEBAR (md+)   */}
-      {/* ======================= */}
-      <nav className="hidden md:flex bg-surface-card border-r border-theme-border w-64 flex-col h-full z-20">
-        <div className="p-6 flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center">
+      <nav className="hidden md:flex bg-surface-card border-r border-theme-border flex-col h-full w-64 flex-shrink-0 z-30">
+        <div className="p-4 h-[72px] flex items-center flex-shrink-0">
+          <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0">
             <img src="/ndhu_logo.png" alt="LingoSwap Logo" className="w-full h-full object-contain" />
           </div>
-          <span className="font-bold text-xl text-theme-text">LingoSwap</span>
+          <span className="font-bold text-xl text-theme-text ml-4 whitespace-nowrap">LingoSwap</span>
         </div>
 
-        <div className="flex-1 px-3 space-y-2 py-4 overflow-y-auto">
+        <div className="flex-1 px-3 space-y-2 py-4 overflow-y-auto overflow-x-hidden">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`w-full flex items-center space-x-3 p-3 rounded-xl transition-all ${
+              className={`w-full flex items-center p-3 rounded-xl transition-all ${
                 activeTab === tab.id
                 ? 'bg-[#00a884]/10 text-[#00a884]'
                 : 'text-theme-muted hover:bg-surface-hover hover:text-theme-text'
               }`}
             >
-              {tab.icon}
-              <span className="font-medium">{tab.label}</span>
+              <div className="flex-shrink-0 flex items-center justify-center w-6 h-6">
+                {tab.icon}
+              </div>
+              <span className="font-medium ml-4 whitespace-nowrap">{tab.label}</span>
             </button>
           ))}
         </div>
@@ -133,20 +132,21 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
         {user && (() => {
           const level = getLevelInfo(user.xp || 0);
           return (
-            <div className="p-3 border-t border-theme-border relative" ref={desktopMenuRef}>
+            <div className="p-3 border-t border-theme-border relative flex-shrink-0" ref={desktopMenuRef}>
               {isMenuOpen && <ActionMenuPopover />}
               <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className={`w-full flex items-center space-x-3 p-2 rounded-xl transition-all hover:bg-surface-hover ${isMenuOpen ? 'bg-surface-hover' : ''}`}
+                className={`w-full flex items-center p-2 rounded-xl transition-all hover:bg-surface-hover ${isMenuOpen ? 'bg-surface-hover' : ''}`}
               >
-                <Avatar src={user.avatar} size="sm" online />
-                <div className="flex-1 min-w-0 text-left">
-                  <p className="text-sm font-semibold text-theme-text truncate">{user.name}</p>
-                  <LevelBadge level={level} size="sm" />
+                <div className="flex-shrink-0">
+                  <Avatar src={user.avatar} size="sm" online />
                 </div>
-                <svg className={`w-4 h-4 text-theme-muted transition-transform duration-200 ${isMenuOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                </svg>
+                <div className="flex-1 min-w-0 text-left ml-3 flex flex-col justify-center overflow-hidden">
+                  <p className="text-sm font-semibold text-theme-text truncate">{user.name}</p>
+                  <div className="scale-90 origin-left">
+                    <LevelBadge level={level} size="sm" />
+                  </div>
+                </div>
               </button>
             </div>
           );

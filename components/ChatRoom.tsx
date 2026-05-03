@@ -147,8 +147,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
     const el = messageRefs.current[messageId];
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.add('bg-gray-800/60', 'transition-colors', 'duration-500', 'rounded-xl');
-      setTimeout(() => el.classList.remove('bg-gray-800/60', 'rounded-xl'), 1500);
+      el.classList.add('bg-surface-card/60', 'transition-colors', 'duration-500', 'rounded-xl');
+      setTimeout(() => el.classList.remove('bg-surface-card/60', 'rounded-xl'), 1500);
     }
   };
 
@@ -168,8 +168,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         // Apply temporary highlight effect matching reply behavior
-        el.classList.add('bg-gray-800/60', 'transition-colors', 'duration-500', 'rounded-xl');
-        setTimeout(() => el.classList.remove('bg-gray-800/60', 'rounded-xl'), 1500);
+        el.classList.add('bg-surface-card/60', 'transition-colors', 'duration-500', 'rounded-xl');
+        setTimeout(() => el.classList.remove('bg-surface-card/60', 'rounded-xl'), 1500);
 
         if (onJumpComplete) onJumpComplete();
       }
@@ -715,7 +715,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
   };
 
   return (
-    <div ref={chatContainerRef} className={`flex flex-col overflow-hidden bg-gray-900 overscroll-none ${isEmbedded ? 'relative w-full h-full' : 'fixed inset-0 w-full max-w-6xl mx-auto z-50'}`}>
+    <div ref={chatContainerRef} className={`flex flex-col overflow-hidden bg-surface-main overscroll-none ${isEmbedded ? 'relative w-full h-full' : 'fixed inset-0 w-full z-50'}`}>
       <style>{`
         @keyframes chatPopIn {
           0% { opacity: 0; transform: translateY(8px); }
@@ -727,28 +727,28 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       `}</style>
 
       {/* Header */}
-      <div className="flex-none bg-gray-900/80 backdrop-blur-xl border-b border-gray-800 shadow-sm z-20 flex justify-center">
-        <div className="w-full max-w-4xl px-4 pb-3.5 pt-[max(0.875rem,env(safe-area-inset-top))] flex items-center space-x-3">
-          <button onClick={onBack} className="p-2 -ml-2 text-gray-400 hover:text-gray-200 hover:bg-gray-800 rounded-full transition-all duration-200 active:scale-95">
+      <div className="flex-none bg-surface-main/80 backdrop-blur-xl border-b border-theme-border shadow-sm z-20 flex">
+        <div className="w-full px-4 lg:px-6 pb-3.5 pt-[max(0.875rem,env(safe-area-inset-top))] flex items-center space-x-3">
+          <button onClick={onBack} className="p-2 -ml-2 text-theme-muted hover:text-theme-text hover:bg-surface-card rounded-full transition-all duration-200 active:scale-95">
             <svg className="w-[22px] h-[22px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" /></svg>
           </button>
           
           <div className="flex items-center flex-1 min-w-0 space-x-3">
             <div className="relative flex-shrink-0">
               <Avatar src={session.partner.avatar} size="sm" />
-              {isPartnerOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-gray-900 rounded-full"></span>}
+              {isPartnerOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-surface-main rounded-full"></span>}
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-gray-100 text-[16px] leading-tight truncate">{session.partner.name}</h3>
-              <p className="text-[13px] text-gray-400 truncate mt-0.5">{isPartnerOnline ? 'Active now' : 'Offline'}</p>
+              <h3 className="font-semibold text-theme-text text-[16px] leading-tight truncate">{session.partner.name}</h3>
+              <p className="text-[13px] text-theme-muted truncate mt-0.5">{isPartnerOnline ? 'Active now' : 'Offline'}</p>
             </div>
           </div>
           
           <div className="flex items-center space-x-1 pr-1">
-            <button onClick={() => handleCallClick('video')} className={`p-2.5 rounded-full transition-all duration-200 active:scale-95 ${isPartnerOnline ? 'text-gray-400 hover:text-blue-400 hover:bg-gray-800' : 'text-gray-600 cursor-not-allowed'}`}>
+            <button onClick={() => handleCallClick('video')} className={`p-2.5 rounded-full transition-all duration-200 active:scale-95 ${isPartnerOnline ? 'text-theme-muted hover:text-blue-400 hover:bg-surface-card' : 'text-theme-muted cursor-not-allowed'}`}>
               <svg className="w-[22px] h-[22px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
             </button>
-            <button onClick={() => handleCallClick('voice')} className={`p-2.5 rounded-full transition-all duration-200 active:scale-95 ${isPartnerOnline ? 'text-gray-400 hover:text-blue-400 hover:bg-gray-800' : 'text-gray-600 cursor-not-allowed'}`}>
+            <button onClick={() => handleCallClick('voice')} className={`p-2.5 rounded-full transition-all duration-200 active:scale-95 ${isPartnerOnline ? 'text-theme-muted hover:text-blue-400 hover:bg-surface-card' : 'text-theme-muted cursor-not-allowed'}`}>
               <svg className="w-[20px] h-[20px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
             </button>
 
@@ -757,7 +757,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
               <button
                 ref={headerMenuBtnRef}
                 onClick={() => setIsHeaderMenuOpen((prev) => !prev)}
-                className={`p-2.5 rounded-full transition-all duration-200 active:scale-95 text-gray-400 hover:text-gray-200 hover:bg-gray-800 ${isHeaderMenuOpen ? 'bg-gray-800 text-gray-200' : ''}`}
+                className={`p-2.5 rounded-full transition-all duration-200 active:scale-95 text-theme-muted hover:text-theme-text hover:bg-surface-card ${isHeaderMenuOpen ? 'bg-surface-card text-theme-text' : ''}`}
                 title="More options"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -814,8 +814,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       )}
 
       {/* Messages Area */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative bg-gray-900 z-0 flex justify-center">
-        <div className="w-full max-w-4xl px-4 py-6">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative bg-surface-main z-0 flex">
+        <div className="w-full px-4 lg:px-8 py-6">
           {messages.map((msg, index) => {
             const prevMsg = messages[index - 1];
             const nextMsg = messages[index + 1];
@@ -827,13 +827,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
                 <React.Fragment key={msg.id}>
                   {showDate && (
                     <div className="flex justify-center my-6">
-                      <span className="bg-gray-800/60 text-gray-400 text-xs font-semibold px-4 py-1.5 rounded-full border border-gray-700/50 backdrop-blur-sm">
+                      <span className="bg-surface-card/60 text-theme-muted text-xs font-semibold px-4 py-1.5 rounded-full border border-theme-border/50 backdrop-blur-sm">
                         {formatDateSeparator(msg.timestamp)}
                       </span>
                     </div>
                   )}
                   <div className="w-full flex justify-center my-3 relative" ref={(el) => (messageRefs.current[msg.id] = el)}>
-                    <div className="bg-gray-800/80 text-gray-300 text-[12.5px] tracking-wide px-5 py-2 rounded-full border border-gray-700/50 backdrop-blur-md shadow-sm">
+                    <div className="bg-surface-card/80 text-theme-text text-[12.5px] tracking-wide px-5 py-2 rounded-full border border-theme-border/50 backdrop-blur-md shadow-sm">
                       {msg.text}
                     </div>
                   </div>
@@ -876,8 +876,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
                       });
                     }
                   }}
-                  className={`p-1.5 rounded-full text-gray-500 hover:text-gray-200 hover:bg-gray-800 transition-all ${
-                    isActiveMenu ? 'opacity-100 bg-gray-800' : 'opacity-0 group-hover:opacity-100'
+                  className={`p-1.5 rounded-full text-theme-muted hover:text-theme-text hover:bg-surface-card transition-all ${
+                    isActiveMenu ? 'opacity-100 bg-surface-card' : 'opacity-0 group-hover:opacity-100'
                   }`}
                   title="Message options"
                 >
@@ -890,7 +890,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
 
                 {isActiveMenu && typeof document !== 'undefined' && createPortal(
                   <div 
-                    className="fixed w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl py-1 z-[100] overflow-hidden"
+                    className="fixed w-48 bg-surface-card border border-theme-border rounded-lg shadow-2xl py-1 z-[100] overflow-hidden"
                     style={{
                       ...(menuConfig.position === 'top' 
                         ? { top: menuConfig.rect.bottom + 4 } 
@@ -906,7 +906,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
                         handleReplyMessage(msg);
                         setMenuConfig(null);
                       }}
-                      className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-gray-200 hover:bg-gray-700 hover:text-white transition-colors"
+                      className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-theme-text hover:bg-surface-hover hover:text-white transition-colors"
                     >
                       Reply
                     </button>
@@ -919,8 +919,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
                       }}
                       className={`w-full text-left px-4 py-2.5 text-[13px] font-medium transition-colors ${
                         isPhrasebookSaved 
-                          ? 'text-emerald-400 hover:bg-gray-700 hover:text-emerald-300' 
-                          : 'text-gray-200 hover:bg-gray-700 hover:text-white'
+                          ? 'text-emerald-400 hover:bg-surface-hover hover:text-emerald-300' 
+                          : 'text-theme-text hover:bg-surface-hover hover:text-white'
                       }`}
                     >
                       {isPhrasebookSaved ? 'Remove from phrasebook' : 'Save to phrasebook'}
@@ -934,8 +934,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
                       }}
                       className={`w-full text-left px-4 py-2.5 text-[13px] font-medium transition-colors ${
                         isStudyLater 
-                          ? 'text-purple-400 hover:bg-gray-700 hover:text-purple-300' 
-                          : 'text-gray-200 hover:bg-gray-700 hover:text-white'
+                          ? 'text-purple-400 hover:bg-surface-hover hover:text-purple-300' 
+                          : 'text-theme-text hover:bg-surface-hover hover:text-white'
                       }`}
                     >
                       {isStudyLater ? 'Remove from study later' : 'Mark as study later'}
@@ -947,7 +947,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
                         handleToggleFavorite(msg.id, isFavorited);
                         setMenuConfig(null);
                       }}
-                      className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-amber-400 hover:bg-gray-700 hover:text-amber-300 transition-colors"
+                      className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-amber-400 hover:bg-surface-hover hover:text-amber-300 transition-colors"
                     >
                       {isFavorited ? 'Unfavorite' : 'Favorite'}
                     </button>
@@ -959,7 +959,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
                           handleDeleteMessage(msg);
                           setMenuConfig(null);
                         }}
-                        className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-red-400 hover:bg-gray-700 hover:text-red-300 transition-colors"
+                        className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-red-400 hover:bg-surface-hover hover:text-red-300 transition-colors"
                       >
                         Unsend
                       </button>
@@ -974,7 +974,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
               <React.Fragment key={msg.id}>
                 {showDate && (
                   <div className="flex justify-center my-6">
-                    <span className="px-3 py-1 bg-gray-800/80 text-gray-400 border border-gray-700/50 text-[11px] font-bold rounded-full uppercase tracking-wider backdrop-blur-sm shadow-sm">
+                    <span className="px-3 py-1 bg-surface-card/80 text-theme-muted border border-theme-border/50 text-[11px] font-bold rounded-full uppercase tracking-wider backdrop-blur-sm shadow-sm">
                       {formatDateSeparator(msg.timestamp)}
                     </span>
                   </div>
@@ -1008,9 +1008,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
 
           {isUploading && (
             <div className="flex w-full justify-end animate-chat-msg mt-4">
-              <div className="bg-gray-800 border border-gray-700 max-w-[80%] px-4 py-2 rounded-2xl rounded-tr-[4px] shadow-sm flex items-center space-x-2">
+              <div className="bg-surface-card border border-theme-border max-w-[80%] px-4 py-2 rounded-2xl rounded-tr-[4px] shadow-sm flex items-center space-x-2">
                 <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="text-xs text-gray-300 font-medium">Sending... {Math.round(uploadProgress)}%</span>
+                <span className="text-xs text-theme-text font-medium">Sending... {Math.round(uploadProgress)}%</span>
               </div>
             </div>
           )}
@@ -1035,8 +1035,8 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       )}
 
       {/* Input Field Area */}
-      <div className="flex-none relative z-20 bg-gray-900 border-t border-gray-800 transition-colors duration-300 flex justify-center">
-        <div className="w-full max-w-4xl">
+      <div className="flex-none relative z-20 bg-surface-main border-t border-theme-border transition-colors duration-300 flex">
+        <div className="w-full">
           <input 
             type="file" 
             ref={fileInputRef} 
