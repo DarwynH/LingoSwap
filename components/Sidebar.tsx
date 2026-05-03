@@ -75,7 +75,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
     <div className={`absolute ${isMobile ? 'bottom-full right-4 mb-4' : 'bottom-full left-3 right-3 mb-2'} w-48 md:w-auto bg-surface-card border border-theme-border rounded-2xl shadow-2xl overflow-hidden z-[60] animate-in fade-in slide-in-from-bottom-2 duration-200`}>
       <div className="p-2 space-y-1">
         <button
-          onClick={() => { onSettings?.(); setIsMenuOpen(false); }}
+          type="button"
+          onMouseDown={(e) => { e.preventDefault(); onSettings?.(); setIsMenuOpen(false); }}
           className="w-full flex items-center space-x-3 p-3 rounded-xl text-theme-text hover:bg-surface-hover transition-colors"
         >
           <svg className="w-5 h-5 text-theme-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,7 +86,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
           <span className="font-medium text-sm">Profile / Settings</span>
         </button>
         <button
-          onClick={() => { onLogout?.(); setIsMenuOpen(false); }}
+          type="button"
+          onMouseDown={(e) => { e.preventDefault(); onLogout?.(); setIsMenuOpen(false); }}
           className="w-full flex items-center space-x-3 p-3 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
