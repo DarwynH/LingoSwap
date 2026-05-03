@@ -122,7 +122,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   return (
-    <div className="w-full flex flex-col bg-gray-900 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div className="w-full max-w-full overflow-hidden flex flex-col bg-gray-900 pb-[max(1rem,env(safe-area-inset-bottom))]">
       
       {/* NEW: Compact Reply Preview Banner */}
       {replyTarget && (
@@ -249,7 +249,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       )}
 
       {/* Main Input Row */}
-      <div className="w-full px-3 pt-2 flex items-end space-x-2">
+      <div className="w-full max-w-full overflow-hidden px-3 pt-2 flex items-end space-x-2">
         {/* Attachment Button & Popover Menu Container */}
         {!isRecording && (
           <div 
@@ -334,11 +334,11 @@ const ChatInput: React.FC<ChatInputProps> = ({
         ) : (
           <form
             onSubmit={handleTextSubmit}
-            className="flex-1 flex items-center bg-gray-800 rounded-3xl border border-transparent focus-within:border-gray-700 focus-within:bg-gray-800 focus-within:ring-2 focus-within:ring-gray-700 transition-all duration-300 ease-out mb-0.5"
+            className="flex-1 min-w-0 flex items-center bg-gray-800 rounded-3xl border border-transparent focus-within:border-gray-700 focus-within:bg-gray-800 focus-within:ring-2 focus-within:ring-gray-700 transition-all duration-300 ease-out mb-0.5"
           >
             <input
               type="text"
-              className="flex-1 bg-transparent border-none pl-4 pr-1 py-2 text-base text-gray-100 focus:outline-none placeholder-gray-500"
+              className="flex-1 min-w-0 bg-transparent border-none pl-4 pr-1 py-2 text-base text-gray-100 focus:outline-none placeholder-gray-500"
               placeholder="Message"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
@@ -364,7 +364,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         )}
 
         {/* Primary Action Buttons */}
-        <div className="flex-shrink-0 mb-0.5 relative">
+        <div className="flex-shrink-0 shrink-0 mb-0.5 relative">
           {inputText.trim() && !isRecording ? (
             <button 
               onClick={handleTextSubmit}

@@ -38,7 +38,11 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
 
   const otherPartners = realPartners.filter(p => !suggestedPartners.includes(p));
 
-  if (loading) return <div className="p-8 text-center text-theme-muted">Loading partners...</div>;
+  if (loading) return (
+    <div className="flex-1 flex flex-col h-full bg-surface-main items-center justify-center p-8 text-center text-theme-muted">
+      Loading partners...
+    </div>
+  );
 
   return (
     <div className="flex-1 flex flex-col h-full bg-surface-main">

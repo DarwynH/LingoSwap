@@ -61,7 +61,7 @@ const App: React.FC = () => {
     };
   }, [incomingCall, view]);
 
-useEffect(() => {
+  useEffect(() => {
     let callUnsub: () => void;
     let heartbeatInterval: NodeJS.Timeout;
 
@@ -426,14 +426,30 @@ useEffect(() => {
     }
   };
   
+  // FIXED LOGOUT FUNCTION 
   const handleLogout = async () => {
+    // 1. Immediately update the UI so the button feels responsive
+    setView('landing');
+
+    // 2. Safely attempt to update online status (don't break if it fails)
     if (user) {
-      await updateDoc(doc(db, "users", user.id), { isOnline: false });
+      try {
+        await updateDoc(doc(db, "users", user.id), { isOnline: false });
+      } catch (error) {
+        console.warn("Could not update online status, proceeding to logout:", error);
+      }
     }
-    await signOut(auth);
+
+    // 3. Safely sign out of Firebase
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.warn("Firebase sign out error:", error);
+    }
+
+    // 4. Clear local session data
     sessionStorage.removeItem('lingoswap_user');
     setUser(null);
-    setView('landing');
   };
 
   const handleAcceptCall = async () => {
@@ -491,7 +507,7 @@ useEffect(() => {
   };
 
   return (
-    <div className="fixed inset-0 w-full flex flex-col max-w-6xl mx-auto bg-white shadow-xl overflow-hidden overscroll-none touch-manipulation">
+    <div className="fixed inset-0 w-full flex flex-col max-w-6xl mx-auto bg-gray-900 shadow-xl overflow-hidden overscroll-none touch-manipulation">
       <style>{`
         @keyframes slideInDown {
           0% { opacity: 0; transform: translateY(-20px); }
@@ -548,7 +564,7 @@ useEffect(() => {
       {view === 'setup' && user && <ProfileSetup profile={user} onSave={handleProfileSave} />}
       
       {view === 'main' && user && (
-        <div className="flex flex-1 overflow-hidden h-full">
+        <div className="flex flex-1 overflow-hidden h-full w-full">
           <Sidebar 
             activeTab={activeTab} 
             onTabChange={(tab) => {

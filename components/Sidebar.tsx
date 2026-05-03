@@ -17,12 +17,17 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount = 0, user, onLogout, onSettings }) => {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
-  const menuRef = React.useRef<HTMLDivElement>(null);
+  const desktopMenuRef = React.useRef<HTMLDivElement>(null);
+  const mobileMenuRef = React.useRef<HTMLDivElement>(null);
 
   // Close menu when clicking outside
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const isOutsideDesktop = !desktopMenuRef.current || !desktopMenuRef.current.contains(target);
+      const isOutsideMobile = !mobileMenuRef.current || !mobileMenuRef.current.contains(target);
+      
+      if (isOutsideDesktop && isOutsideMobile) {
         setIsMenuOpen(false);
       }
     };
@@ -126,7 +131,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
         {user && (() => {
           const level = getLevelInfo(user.xp || 0);
           return (
-            <div className="p-3 border-t border-theme-border relative" ref={menuRef}>
+            <div className="p-3 border-t border-theme-border relative" ref={desktopMenuRef}>
               {isMenuOpen && <ActionMenuPopover />}
               <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -169,7 +174,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
 
         {/* Mobile Profile Trigger */}
         {user && (
-          <div className="relative flex-1 min-w-0 flex flex-col items-center justify-center" ref={menuRef}>
+          <div className="relative flex-1 min-w-0 flex flex-col items-center justify-center" ref={mobileMenuRef}>
             {isMenuOpen && <ActionMenuPopover isMobile={true} />}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
