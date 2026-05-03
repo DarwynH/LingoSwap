@@ -491,7 +491,7 @@ useEffect(() => {
   };
 
   return (
-    <div className="fixed inset-0 w-full flex flex-col max-w-6xl mx-auto bg-white shadow-xl overflow-hidden overscroll-none touch-manipulation">
+    <div className="fixed inset-0 w-full flex flex-col max-w-6xl mx-auto bg-gray-900 shadow-xl overflow-hidden overscroll-none touch-manipulation">
       <style>{`
         @keyframes slideInDown {
           0% { opacity: 0; transform: translateY(-20px); }
@@ -548,7 +548,7 @@ useEffect(() => {
       {view === 'setup' && user && <ProfileSetup profile={user} onSave={handleProfileSave} />}
       
       {view === 'main' && user && (
-        <div className="flex flex-1 overflow-hidden h-full">
+        <div className="flex flex-1 overflow-hidden h-full w-full">
           <Sidebar 
             activeTab={activeTab} 
             onTabChange={(tab) => {
