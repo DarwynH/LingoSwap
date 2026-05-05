@@ -45,6 +45,16 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
 
+  // Captions state
+  const [captionsSupported, setCaptionsSupported] = useState(false);
+  const [isCaptionsEnabled, setIsCaptionsEnabled] = useState(false);
+  const [transcriptLines, setTranscriptLines] = useState<string[]>([]);
+  const [recognitionError, setRecognitionError] = useState<string | null>(null);
+
+  // Captions refs
+  const recognitionRef = useRef<any>(null);
+  const recognitionActiveRef = useRef(false);
+
   useEffect(() => {
     const getDevices = async () => {
       // Graceful handling if `setSinkId` isn't supported (e.g. Safari, Firefox by default)
@@ -63,6 +73,12 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
     getDevices();
   }, []);
 
+  // Detect captions support
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    setCaptionsSupported(!!SpeechRecognition);
+  }, []);
+
   const createDummyVideoTrack = () => {
     const canvas = document.createElement('canvas');
     canvas.width = 1; canvas.height = 1;
@@ -74,6 +90,73 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
     const dummyStream = canvas.captureStream(1);
     return dummyStream.getVideoTracks()[0];
   };
+
+  const initSpeechRecognition = () => {
+    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || 'en-US';
+
+    recognition.onresult = (event) => {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        }
+      }
+      if (finalTranscript.trim()) {
+        setTranscriptLines(prev => [...prev, finalTranscript.trim()].slice(-3));
+      }
+    };
+
+    recognition.onerror = (event) => {
+      setRecognitionError(`Speech recognition error: ${event.error}`);
+    };
+
+    recognition.onend = () => {
+      if (isCaptionsEnabled && status === 'active' && !recognitionActiveRef.current) {
+        startCaptions();
+      }
+    };
+
+    recognitionRef.current = recognition;
+  };
+
+  const startCaptions = () => {
+    if (!captionsSupported || recognitionActiveRef.current) return;
+    if (!recognitionRef.current) {
+      initSpeechRecognition();
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.start();
+        recognitionActiveRef.current = true;
+        setRecognitionError(null);
+      } catch (error) {
+        setRecognitionError('Failed to start speech recognition');
+      }
+    }
+  };
+
+  const stopCaptions = () => {
+    if (recognitionRef.current && recognitionActiveRef.current) {
+      recognitionRef.current.stop();
+      recognitionActiveRef.current = false;
+    }
+  };
+
+  // Handle captions toggle and call status changes
+  useEffect(() => {
+    if (isCaptionsEnabled && status === 'active') {
+      startCaptions();
+    } else {
+      stopCaptions();
+    }
+  }, [isCaptionsEnabled, status]);
 
   useEffect(() => {
     if (!callId || hasSetupStarted.current) return;
@@ -128,6 +211,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
             if (ringbackRef.current) ringbackRef.current.pause(); 
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
             setStatus('active');
+            if (isCaptionsEnabled) startCaptions();
             timerRef.current = window.setInterval(() => setCallTime((t) => t + 1), 1000);
           } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
             handleHangup(false);
@@ -247,6 +331,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
       if (unsubCallData) unsubCallData();
       if (unsubCallerICE) unsubCallerICE();
       if (unsubReceiverICE) unsubReceiverICE();
+      stopCaptions();
       cleanupMedia();
     };
   }, [callId, currentUser.id, callType]);
@@ -271,6 +356,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
       finalStatus = status === 'connecting' ? 'missed' : 'ended';
     }
     setStatus('ended');
+    stopCaptions();
     cleanupMedia();
 
     if (updateFirebase && callId) {
@@ -376,6 +462,24 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
         className={`absolute bottom-32 right-6 w-28 h-40 bg-gray-900 rounded-2xl object-cover border border-white/20 shadow-2xl z-20 transition-all duration-500 ease-out origin-bottom-right ${myVideoActive ? 'opacity-100 transform scale-100' : 'opacity-0 transform scale-90 pointer-events-none'}`} 
       />
 
+      {/* Captions Overlay */}
+      {status === 'active' && (
+        <div className="absolute bottom-32 left-6 bg-black/60 text-white p-3 rounded-lg text-sm max-w-md z-10">
+          {captionsSupported ? (
+            transcriptLines.length > 0 ? (
+              <div>
+                {transcriptLines.map((line, idx) => <p key={idx}>{line}</p>)}
+              </div>
+            ) : (
+              <p>Captions enabled - start speaking</p>
+            )
+          ) : (
+            <p>Captions not supported in this browser</p>
+          )}
+          {recognitionError && <p className="text-red-400 text-xs">{recognitionError}</p>}
+        </div>
+      )}
+
       {/* Top Header / Avatar UI */}
       <div className={`text-center z-10 w-full px-4 transition-all duration-700 mt-12 ${partnerVideoActive && status === 'active' ? 'translate-y-[-20px] opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
         
@@ -432,6 +536,9 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
             }
           }
         }}
+        isCaptionsEnabled={isCaptionsEnabled}
+        captionsSupported={captionsSupported}
+        onToggleCaptions={() => setIsCaptionsEnabled(!isCaptionsEnabled)}
         onHangup={() => handleHangup(true, 'ended')}
       />
     </div>

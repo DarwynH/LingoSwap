@@ -9,6 +9,9 @@ interface CallControlsProps {
   onToggleMute: () => void;
   onToggleVideo: () => void;
   onSelectAudioDevice?: (deviceId: string) => void;
+  isCaptionsEnabled: boolean;
+  captionsSupported: boolean;
+  onToggleCaptions: () => void;
   onHangup: () => void;
 }
 
@@ -21,6 +24,9 @@ const CallControls: React.FC<CallControlsProps> = ({
   onToggleMute,
   onToggleVideo,
   onSelectAudioDevice,
+  isCaptionsEnabled,
+  captionsSupported,
+  onToggleCaptions,
   onHangup,
 }) => {
   const [showDeviceMenu, setShowDeviceMenu] = useState(false);
@@ -117,6 +123,19 @@ const CallControls: React.FC<CallControlsProps> = ({
           // Camera on icon
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
         )}
+      </button>
+
+      {/* Captions Toggle */}
+      <button 
+        onClick={onToggleCaptions}
+        disabled={!captionsSupported}
+        className={`w-14 h-14 relative flex items-center justify-center rounded-full transition-all duration-300 ${!isCaptionsEnabled ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-white/10 text-white hover:bg-white/20 border border-white/10'} ${!captionsSupported ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'} shadow-lg`}
+        title={captionsSupported ? (isCaptionsEnabled ? "Turn Off Captions" : "Turn On Captions") : "Captions not supported in this browser"}
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m-9 0h10m-9 0V1m10 3V1m0 3l1 1v16a2 2 0 01-2 2H6a2 2 0 01-2-2V5l1-1z"/>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m-6-8h6"/>
+        </svg>
       </button>
 
       {/* End Call */}
