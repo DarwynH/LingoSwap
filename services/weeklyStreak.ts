@@ -1,6 +1,5 @@
-import { db } from '../firebase'; // Ensure this points to your firebase config file
-import { doc, getDoc, updateDoc, increment } from "firebase/firestore";
 import { addXP } from './gamificationService';
+import { updateDailyStreak } from './progressService';
 
 export const checkAndUpdateStreak = async (userId: string, startTime: number) => {
     const now = Date.now();
@@ -8,24 +7,10 @@ export const checkAndUpdateStreak = async (userId: string, startTime: number) =>
 
     // Only proceed if the session was at least 10 minutes
     if (durationInMinutes >= 10) {
-        const userRef = doc(db, "users", userId);
-        const userSnap = await getDoc(userRef);
-
-        if (userSnap.exists()) {
-            const userData = userSnap.data();
-            const today = new Date().toDateString(); // e.g., "Sat Mar 14 2026"
-
-            // Check if they haven't already earned their streak point for today
-            if (userData.lastStreakUpdate !== today) {
-                await updateDoc(userRef, {
-                    streakCount: increment(1),
-                    lastStreakUpdate: today
-                });
-                // Gamification: award XP for daily login streak
-                addXP(userId, 'dailyLogin');
-                console.log("10 minutes reached! Streak updated.");
-            }
-        }
+        await updateDailyStreak(userId);
+        // Gamification: award XP for daily login streak
+        addXP(userId, 'dailyLogin');
+        console.log("10 minutes reached! Streak updated.");
     } else {
         console.log(`Session was only ${durationInMinutes.toFixed(1)} minutes. No streak update.`);
     }

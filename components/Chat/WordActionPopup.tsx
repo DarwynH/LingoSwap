@@ -3,6 +3,7 @@ import { db } from '../../firebase';
 import { doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { DictionaryResult, SavedVocabularyItem } from '../../types';
 import { lookupWord } from '../../services/dictionaryService';
+import { recordActions } from '../../services/gamificationService';
 
 interface WordActionPopupProps {
   word: string;
@@ -92,6 +93,9 @@ const WordActionPopup: React.FC<WordActionPopupProps> = ({
         if (result.phonetic) vocabItem.phonetic = result.phonetic;
 
         await setDoc(docRef, vocabItem);
+        recordActions(userId, [
+          { xpAction: 'itemSaved', questUpdates: [{ questId: 'save_item', amount: 1 }] },
+        ]).catch((e) => console.warn('Gamification update failed:', e));
       }
     } catch (err) {
       console.error('Failed to toggle vocabulary save:', err);

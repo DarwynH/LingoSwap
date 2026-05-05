@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, QuestData } from '../types';
-import Avatar from './ui/Avatar';
 import LevelBadge from './ui/LevelBadge';
-import { checkAndUpdateStreak } from '../services/weeklyStreak';
 import { getDailyActiveSessions } from '../services/sessionService';
 import { getLevelInfo, getOrResetDailyQuests } from '../services/gamificationService';
 import { db } from '../firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
+import { getSessionSecondsFromUserData, getStreakFromUserData } from '../services/progressService';
 
 interface DashboardProps {
   user: UserProfile;
@@ -16,39 +15,23 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, onNavigateToProgress }) => {
-  const [sessionSeconds, setSessionSeconds] = useState(0);
   const [activeSessions, setActiveSessions] = useState(0);
   const [xp, setXP] = useState(user.xp || 0);
   const [questData, setQuestData] = useState<QuestData | null>(null);
-
-  // 1. Live Timer for Display
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSessionSeconds(s => s + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const [currentStreak, setCurrentStreak] = useState(user.streakCount || 0);
+  const [totalSessionSeconds, setTotalSessionSeconds] = useState(0);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   // 2. Fetch Active Chat Sessions for the Day
   useEffect(() => {
     const fetchSessions = async () => {
-      if (user?.uid) {
-        const count = await getDailyActiveSessions(user.uid);
+      if (user?.id) {
+        const count = await getDailyActiveSessions(user.id);
         setActiveSessions(count);
       }
     };
     fetchSessions();
-  }, [user?.uid]);
-
-  // 3. Streak Trigger on Unmount
-  useEffect(() => {
-    const startTime = Date.now();
-    return () => {
-      if (user?.uid) {
-        checkAndUpdateStreak(user.uid, startTime);
-      }
-    };
-  }, [user?.uid]);
+  }, [user?.id]);
 
   // 4. Listen to real-time XP and quest changes
   useEffect(() => {
@@ -56,10 +39,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
       if (snap.exists()) {
         const data = snap.data();
         setXP(data.xp || 0);
+        setCurrentStreak(getStreakFromUserData(data));
+        setTotalSessionSeconds(getSessionSecondsFromUserData(data));
         if (data.questData) {
           setQuestData(data.questData as QuestData);
         }
+      } else {
+        setCurrentStreak(0);
+        setTotalSessionSeconds(0);
       }
+      setStatsLoading(false);
     });
     return () => unsub();
   }, [user.id]);
@@ -69,14 +58,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
     getOrResetDailyQuests(user.id).then(setQuestData);
   }, [user.id]);
 
-  const totalHours = (sessionSeconds / 3600).toFixed(1);
+  const totalHours = (totalSessionSeconds / 3600).toFixed(1);
+  const totalMinutes = Math.round(totalSessionSeconds / 60);
+  const sessionValue = totalSessionSeconds < 3600 ? `${totalMinutes}` : totalHours;
+  const sessionUnit = totalSessionSeconds < 3600 ? 'Minutes' : 'Hours';
   const level = getLevelInfo(xp);
 
   // Stats now use the local 'activeSessions' state
   const stats = {
-    hoursThisWeek: totalHours,
+    hoursThisWeek: sessionValue,
     sessionsCount: activeSessions,
-    streak: user.streakCount || 0,
+    streak: currentStreak,
   };
 
   const completedQuests = questData?.quests.filter(q => q.progress >= q.target).length || 0;
@@ -103,11 +95,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
               Practice Time
             </p>
             <div className="flex items-baseline space-x-2">
-              <h2 className="text-6xl font-black tracking-tight">{totalHours}</h2>
-              <span className="text-2xl font-bold text-blue-100">Hours</span>
+              <h2 className="text-6xl font-black tracking-tight">{statsLoading ? '--' : stats.hoursThisWeek}</h2>
+              <span className="text-2xl font-bold text-blue-100">{sessionUnit}</span>
             </div>
             <p className="mt-4 text-sm text-blue-50 font-medium max-w-xs leading-relaxed">
-              You've spent {totalHours} hours practicing {user.targetLanguage} this week.
+              You've spent {statsLoading ? '...' : `${stats.hoursThisWeek} ${sessionUnit.toLowerCase()}`} practicing {user.targetLanguage}.
               <span className="block mt-1 opacity-75">Keep pushing toward your goal!</span>
             </p>
           </div>
@@ -125,7 +117,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
           <div className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border">
             <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Current Streak</p>
             <div className="flex items-center space-x-2">
-              <span className="text-2xl font-bold text-orange-500">{stats.streak} Days</span>
+              <span className="text-2xl font-bold text-orange-500">{statsLoading ? '--' : stats.streak} Days</span>
               <span className="text-xl">🔥</span>
             </div>
           </div>

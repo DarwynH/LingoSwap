@@ -4,6 +4,7 @@
 import { db } from '../firebase';
 import { doc, getDoc, updateDoc, increment, setDoc } from 'firebase/firestore';
 import { XPActionType, QuestItem, QuestData, LevelInfo } from '../types';
+import { recordUserActivity } from './progressService';
 
 // ─── XP Reward Table ───────────────────────────────────────────────
 export const XP_REWARDS: Record<XPActionType, number> = {
@@ -120,7 +121,21 @@ export async function recordActions(userId: string, actions: ActionRecord[]): Pr
   try {
     const userRef = doc(db, 'users', userId);
     const userSnap = await getDoc(userRef);
-    if (!userSnap.exists()) return;
+    const hasMeaningfulActivity = actions.some((action) =>
+      action.xpAction === 'messageSent' ||
+      action.xpAction === 'replySent' ||
+      action.xpAction === 'itemSaved'
+    );
+
+    if (!userSnap.exists()) {
+      if (hasMeaningfulActivity) {
+        await recordUserActivity(
+          userId,
+          actions.some((action) => action.xpAction === 'itemSaved') ? 'itemSaved' : 'messageSent'
+        );
+      }
+      return;
+    }
 
     const data = userSnap.data();
     const today = new Date().toDateString();
@@ -188,6 +203,13 @@ export async function recordActions(userId: string, actions: ActionRecord[]): Pr
 
     if (Object.keys(updatePayload).length > 0) {
       await updateDoc(userRef, updatePayload);
+    }
+
+    if (hasMeaningfulActivity) {
+      await recordUserActivity(
+        userId,
+        actions.some((action) => action.xpAction === 'itemSaved') ? 'itemSaved' : 'messageSent'
+      );
     }
   } catch (e) {
     console.warn('recordActions failed:', e);
@@ -322,6 +344,8 @@ export async function claimQuestReward(userId: string, questId: string): Promise
         lastClaimedAt: Date.now(),
       },
     });
+
+    await recordUserActivity(userId, 'questClaimed');
 
     return true;
   } catch (e) {

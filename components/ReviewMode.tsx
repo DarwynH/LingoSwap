@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, updateDoc, increment } from 'firebase/firestore';
 import { SavedItem } from '../types';
+import { recordUserActivity } from '../services/progressService';
 
 interface ReviewModeProps {
   items: SavedItem[];
@@ -42,6 +43,7 @@ const ReviewMode: React.FC<ReviewModeProps> = ({ items, userId, onClose }) => {
         lastReviewedAt: Date.now(),
         difficulty,
       });
+      await recordUserActivity(userId, 'reviewCompleted');
       setMarkedIds(prev => new Set(prev).add(item.id));
     } catch (e) {
       console.warn('Could not update review metadata', e);
