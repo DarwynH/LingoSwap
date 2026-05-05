@@ -27,6 +27,7 @@ import WordActionPopup from './Chat/WordActionPopup';
 import ChatHeaderMenu from './Chat/ChatHeaderMenu';
 import ChatSearchBar from './Chat/ChatSearchBar';
 import AttachmentPreviewModal from './Chat/AttachmentPreviewModal';
+import IdiomExplanationModal from './Chat/IdiomExplanationModal';
 import { createPortal } from 'react-dom';
 import { recordActions } from '../services/gamificationService';
 import { resolveDeepLTarget } from '../services/translationService';
@@ -111,6 +112,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
     messageId: string;
     sourceText: string;
   } | null>(null);
+
+  // Idiom/Slang Explanation State
+  const [explainPhraseText, setExplainPhraseText] = useState<string | null>(null);
 
   // Header menu & search state
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
@@ -918,6 +922,30 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        const selection = window.getSelection()?.toString().trim();
+                        if (selection) {
+                          setExplainPhraseText(selection);
+                        } else {
+                          const text = msg.text || '';
+                          if (text.length > 0 && text.length <= 60) {
+                            setExplainPhraseText(text);
+                          } else {
+                            const input = window.prompt("Enter the slang or idiom phrase to explain:");
+                            if (input && input.trim()) {
+                              setExplainPhraseText(input.trim());
+                            }
+                          }
+                        }
+                        setMenuConfig(null);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-blue-400 hover:bg-surface-hover hover:text-blue-300 transition-colors"
+                    >
+                      Explain phrase
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
                         handleToggleSave(msg, 'phrasebook', isPhrasebookSaved);
                         setMenuConfig(null);
                       }}
@@ -1091,6 +1119,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
           attachment={pendingAttachment}
           onClose={handleCancelAttachment}
           onSend={(caption) => confirmAndUploadAttachment(caption, pendingAttachment)}
+        />
+      )}
+
+      {/* Idiom Explanation Modal */}
+      {explainPhraseText && (
+        <IdiomExplanationModal
+          phrase={explainPhraseText}
+          preferredLanguage={currentMessageTarget}
+          onClose={() => setExplainPhraseText(null)}
         />
       )}
     </div>

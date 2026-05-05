@@ -1,0 +1,62 @@
+[
+  {
+    "phrase": "break a leg",
+    "meaning": "good luck",
+    "explanation": "A theatrical idiom used to wish a performer good luck.",
+    "example": "Break a leg out there tonight!"
+  },
+  {
+    "phrase": "piece of cake",
+    "meaning": "very easy",
+    "explanation": "Something that is easily achieved.",
+    "example": "The math test was a piece of cake."
+  },
+  {
+    "phrase": "hang out",
+    "meaning": "spend time casually",
+    "explanation": "To spend time relaxing or socializing informally.",
+    "example": "Do you want to hang out after school?"
+  },
+  {
+    "phrase": "i'm down",
+    "meaning": "I agree / I'm interested",
+    "explanation": "Expressing willingness or agreement to participate in something.",
+    "example": "I'm down to go get some pizza."
+  },
+  {
+    "phrase": "spill the tea",
+    "meaning": "share gossip",
+    "explanation": "To disclose information or gossip about something.",
+    "example": "Come on, spill the tea about what happened at the party!"
+  },
+  {
+    "phrase": "under the weather",
+    "meaning": "feeling sick",
+    "explanation": "Feeling slightly ill or not as well as usual.",
+    "example": "I'm feeling a bit under the weather today, so I'll stay home."
+  },
+  {
+    "phrase": "bite the bullet",
+    "meaning": "face a difficult situation",
+    "explanation": "To endure a painful or otherwise unpleasant situation that is seen as unavoidable.",
+    "example": "I hate going to the dentist, but I just have to bite the bullet."
+  },
+  {
+    "phrase": "hit the sack",
+    "meaning": "go to sleep",
+    "explanation": "To go to bed in order to sleep.",
+    "example": "It's been a long day, I'm going to hit the sack."
+  },
+  {
+    "phrase": "cost an arm and a leg",
+    "meaning": "very expensive",
+    "explanation": "Used to describe something that is excessively expensive.",
+    "example": "That new sports car must cost an arm and a leg."
+  },
+  {
+    "phrase": "let the cat out of the bag",
+    "meaning": "reveal a secret",
+    "explanation": "To accidentally or intentionally reveal a secret or surprise.",
+    "example": "We were planning a surprise party, but my brother let the cat out of the bag."
+  }
+]
