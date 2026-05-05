@@ -25,7 +25,7 @@ export interface UserProfile {
   lastMessageAt?: number; 
   avatar: string;
   isOnline?: boolean;
-  lastSeen?: number;
+  lastSeen?: any;
   favoriteMessages?: string[];
   xp?: number;
   questData?: QuestData;

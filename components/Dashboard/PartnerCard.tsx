@@ -5,6 +5,7 @@ import Avatar from '../ui/Avatar';
 import LanguageBadge from '../ui/LanguageBadge';
 import LevelBadge from '../ui/LevelBadge';
 import { getLevelInfo } from '../../services/gamificationService';
+import { isRecentlyOnline } from '../../utils/presenceUtils';
 
 interface PartnerCardProps {
   partner: UserProfile;
@@ -19,7 +20,7 @@ const PartnerCard: React.FC<PartnerCardProps> = ({ partner, onClick }) => {
       onClick={onClick}
       className="w-full bg-surface-card p-4 rounded-xl shadow-sm hover:bg-surface-hover backdrop-blur-sm transition-all duration-200 flex items-center space-x-4 text-left border border-theme-border active:scale-[0.98]"
     >
-      <Avatar src={partner.avatar} size="lg" online={partner.isOnline} />
+      <Avatar src={partner.avatar} size="lg" online={isRecentlyOnline(partner.isOnline, partner.lastSeen)} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <h4 className="font-bold text-theme-text truncate">{partner.name}</h4>

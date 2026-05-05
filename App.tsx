@@ -1,5 +1,5 @@
 import { db, auth } from './firebase';
-import { doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, onSnapshot, getDocs, writeBatch, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, orderBy, onSnapshot, getDocs, writeBatch, increment, serverTimestamp } from 'firebase/firestore';
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, Language, ChatSession, CallData, ChatMessage } from './types';
 import Auth from './components/Auth';
@@ -71,13 +71,13 @@ const App: React.FC = () => {
         const userDoc = await getDoc(userRef);
 
         if (userDoc.exists()) {
-          await updateDoc(userRef, { isOnline: true, lastSeen: Date.now() });
+          await updateDoc(userRef, { isOnline: true, lastSeen: serverTimestamp() });
           setUser(userDoc.data() as UserProfile);
           setView('main');
 
           heartbeatInterval = setInterval(() => {
             if (document.visibilityState === 'visible') {
-              updateDoc(userRef, { isOnline: true, lastSeen: Date.now() }).catch(e => console.warn(e));
+              updateDoc(userRef, { isOnline: true, lastSeen: serverTimestamp() }).catch(e => console.warn(e));
             }
           }, 60000);
 
@@ -121,14 +121,14 @@ const App: React.FC = () => {
       const userRef = doc(db, "users", auth.currentUser.uid);
       updateDoc(userRef, { 
         isOnline: document.visibilityState === 'visible',
-        lastSeen: Date.now() 
+        lastSeen: serverTimestamp() 
       }).catch(e => console.warn(e));
     };
 
     const handleUnload = () => {
       if (auth.currentUser) {
         const userRef = doc(db, "users", auth.currentUser.uid);
-        updateDoc(userRef, { isOnline: false, lastSeen: Date.now() });
+        updateDoc(userRef, { isOnline: false, lastSeen: serverTimestamp() });
       }
     };
 
@@ -425,7 +425,7 @@ const App: React.FC = () => {
     const res = await signInWithEmailAndPassword(auth, email, password);
     const userDoc = await getDoc(doc(db, "users", res.user.uid));
     if (userDoc.exists()) {
-      await updateDoc(doc(db, "users", res.user.uid), { isOnline: true });
+      await updateDoc(doc(db, "users", res.user.uid), { isOnline: true, lastSeen: serverTimestamp() });
       setUser(userDoc.data() as UserProfile);
       setView('main');
     }
@@ -439,7 +439,7 @@ const App: React.FC = () => {
     // 2. Safely attempt to update online status (don't break if it fails)
     if (user) {
       try {
-        await updateDoc(doc(db, "users", user.id), { isOnline: false });
+        await updateDoc(doc(db, "users", user.id), { isOnline: false, lastSeen: serverTimestamp() });
       } catch (error) {
         console.warn("Could not update online status, proceeding to logout:", error);
       }

@@ -30,6 +30,7 @@ import AttachmentPreviewModal from './Chat/AttachmentPreviewModal';
 import { createPortal } from 'react-dom';
 import { recordActions } from '../services/gamificationService';
 import { resolveDeepLTarget } from '../services/translationService';
+import { isRecentlyOnline, formatLastSeen } from '../utils/presenceUtils';
 
 interface ChatRoomProps {
   user: UserProfile;
@@ -88,6 +89,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
 
   // Status and active UI states
   const [isPartnerOnline, setIsPartnerOnline] = useState(false);
+  const [partnerLastSeenText, setPartnerLastSeenText] = useState('Offline');
   const [menuConfig, setMenuConfig] = useState<{ 
     id: string; 
     rect: { top: number; bottom: number; left: number; right: number };
@@ -230,10 +232,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
     const checkPresence = () => {
       if (!partnerStatus) {
         setIsPartnerOnline(false);
+        setPartnerLastSeenText('Offline');
         return;
       }
-      const isRecent = partnerStatus.lastSeen ? Date.now() - partnerStatus.lastSeen < 120000 : false;
-      setIsPartnerOnline((partnerStatus.isOnline || false) && isRecent);
+      const isOnlineNow = isRecentlyOnline(partnerStatus.isOnline, partnerStatus.lastSeen);
+      setIsPartnerOnline(isOnlineNow);
+      setPartnerLastSeenText(formatLastSeen(partnerStatus.lastSeen, partnerStatus.isOnline, partnerStatus.showActiveStatus));
     };
 
     checkPresence();
@@ -740,7 +744,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-theme-text text-[16px] leading-tight truncate">{session.partner.name}</h3>
-              <p className="text-[13px] text-theme-muted truncate mt-0.5">{isPartnerOnline ? 'Active now' : 'Offline'}</p>
+              <p className="text-[13px] text-theme-muted truncate mt-0.5">{partnerLastSeenText}</p>
             </div>
           </div>
           
