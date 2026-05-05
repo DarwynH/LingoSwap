@@ -1,8 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { UserProfile, CallStatus } from '../types';
+import { UserProfile, CallStatus, Language } from '../types';
 import { db } from '../firebase';
 import { doc, updateDoc, getDoc, collection, addDoc, onSnapshot } from 'firebase/firestore';
 import CallControls from './CallControls';
+
+// Map Language enum to BCP 47 language codes for SpeechRecognition
+const languageCodeMap: Record<string, string> = {
+  [Language.ENGLISH]: 'en-US',
+  [Language.SPANISH]: 'es-ES',
+  [Language.FRENCH]: 'fr-FR',
+  [Language.GERMAN]: 'de-DE',
+  [Language.JAPANESE]: 'ja-JP',
+  [Language.CHINESE]: 'zh-CN',
+  [Language.KOREAN]: 'ko-KR',
+  [Language.ITALIAN]: 'it-IT',
+  [Language.PORTUGUESE]: 'pt-BR',
+};
+
+const getLanguageCode = (language: Language | Language[]): string => {
+  const lang = Array.isArray(language) ? language[0] : language;
+  return languageCodeMap[lang] || 'en-US';
+};
 
 interface CallRoomProps {
   currentUser: UserProfile;
@@ -50,6 +68,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
   const [isCaptionsEnabled, setIsCaptionsEnabled] = useState(false);
   const [transcriptLines, setTranscriptLines] = useState<string[]>([]);
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
+  const [captionLanguage, setCaptionLanguage] = useState<Language>(Array.isArray(currentUser.nativeLanguage) ? currentUser.nativeLanguage[0] : currentUser.nativeLanguage);
 
   // Captions refs
   const recognitionRef = useRef<any>(null);
@@ -98,7 +117,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = navigator.language || 'en-US';
+    recognition.lang = getLanguageCode(captionLanguage);
 
     recognition.onresult = (event) => {
       let finalTranscript = '';
@@ -152,11 +171,13 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
   // Handle captions toggle and call status changes
   useEffect(() => {
     if (isCaptionsEnabled && status === 'active') {
+      stopCaptions();
+      initSpeechRecognition();
       startCaptions();
     } else {
       stopCaptions();
     }
-  }, [isCaptionsEnabled, status]);
+  }, [isCaptionsEnabled, status, captionLanguage]);
 
   useEffect(() => {
     if (!callId || hasSetupStarted.current) return;
@@ -466,13 +487,30 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
       {status === 'active' && (
         <div className="absolute bottom-32 left-6 bg-black/60 text-white p-3 rounded-lg text-sm max-w-md z-10">
           {captionsSupported ? (
-            transcriptLines.length > 0 ? (
-              <div>
-                {transcriptLines.map((line, idx) => <p key={idx}>{line}</p>)}
+            <>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-emerald-400">Captions: {captionLanguage}</span>
+                {isCaptionsEnabled && (
+                  <button
+                    onClick={() => {
+                      const targetLang = Array.isArray(currentUser.targetLanguage) ? currentUser.targetLanguage[0] : currentUser.targetLanguage;
+                      const nativeLang = Array.isArray(currentUser.nativeLanguage) ? currentUser.nativeLanguage[0] : currentUser.nativeLanguage;
+                      setCaptionLanguage(captionLanguage === nativeLang ? targetLang : nativeLang);
+                    }}
+                    className="text-xs bg-white/20 px-2 py-1 rounded hover:bg-white/30 transition-colors"
+                  >
+                    Switch
+                  </button>
+                )}
               </div>
-            ) : (
-              <p>Captions enabled - start speaking</p>
-            )
+              {transcriptLines.length > 0 ? (
+                <div>
+                  {transcriptLines.map((line, idx) => <p key={idx}>{line}</p>)}
+                </div>
+              ) : (
+                <p>Captions enabled - start speaking</p>
+              )}
+            </>
           ) : (
             <p>Captions not supported in this browser</p>
           )}
