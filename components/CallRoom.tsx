@@ -69,10 +69,15 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
   const [transcriptLines, setTranscriptLines] = useState<string[]>([]);
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
   const [captionLanguage, setCaptionLanguage] = useState<Language>(Array.isArray(currentUser.nativeLanguage) ? currentUser.nativeLanguage[0] : currentUser.nativeLanguage);
+  const [remoteTranscriptLines, setRemoteTranscriptLines] = useState<string[]>([]);
+  const [remoteRecognitionError, setRemoteRecognitionError] = useState<string | null>(null);
+  const [isRemoteCaptionsEnabled, setIsRemoteCaptionsEnabled] = useState(false);
 
   // Captions refs
   const recognitionRef = useRef<any>(null);
   const recognitionActiveRef = useRef(false);
+  const remoteRecognitionRef = useRef<any>(null);
+  const remoteRecognitionActiveRef = useRef(false);
 
   useEffect(() => {
     const getDevices = async () => {
@@ -168,6 +173,85 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
     }
   };
 
+  const initRemoteSpeechRecognition = () => {
+    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = getLanguageCode(Array.isArray(partner.nativeLanguage) ? partner.nativeLanguage[0] : partner.nativeLanguage);
+
+    recognition.onresult = (event) => {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        }
+      }
+      if (finalTranscript.trim()) {
+        setRemoteTranscriptLines(prev => [...prev, finalTranscript.trim()].slice(-3));
+      }
+    };
+
+    recognition.onerror = (event) => {
+      setRemoteRecognitionError(`Remote recognition error: ${event.error}`);
+    };
+
+    recognition.onend = () => {
+      if (isRemoteCaptionsEnabled && status === 'active' && !remoteRecognitionActiveRef.current) {
+        startRemoteCaptions();
+      }
+    };
+
+    remoteRecognitionRef.current = recognition;
+  };
+
+  const startRemoteCaptions = () => {
+    if (!captionsSupported || remoteRecognitionActiveRef.current) return;
+
+    // Try to get remote audio stream
+    if (remoteStreamRef.current && remoteStreamRef.current.getAudioTracks().length > 0) {
+      const remoteAudioTrack = remoteStreamRef.current.getAudioTracks()[0];
+      const remoteAudioStream = new MediaStream([remoteAudioTrack]);
+
+      if (!remoteRecognitionRef.current) {
+        initRemoteSpeechRecognition();
+      }
+
+      if (remoteRecognitionRef.current) {
+        try {
+          // Create a new MediaStreamAudioSourceNode from the remote stream
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const source = audioContext.createMediaStreamSource(remoteAudioStream);
+          const destination = audioContext.createMediaStreamDestination();
+
+          source.connect(destination);
+
+          // Try to use the processed stream for recognition
+          const processedStream = destination.stream;
+
+          remoteRecognitionRef.current.start();
+          remoteRecognitionActiveRef.current = true;
+          setRemoteRecognitionError(null);
+        } catch (error) {
+          setRemoteRecognitionError('Failed to access remote audio for recognition');
+          console.error('Remote audio recognition setup failed:', error);
+        }
+      }
+    } else {
+      setRemoteRecognitionError('No remote audio stream available');
+    }
+  };
+
+  const stopRemoteCaptions = () => {
+    if (remoteRecognitionRef.current && remoteRecognitionActiveRef.current) {
+      remoteRecognitionRef.current.stop();
+      remoteRecognitionActiveRef.current = false;
+    }
+  };
+
   // Handle captions toggle and call status changes
   useEffect(() => {
     if (isCaptionsEnabled && status === 'active') {
@@ -178,6 +262,17 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
       stopCaptions();
     }
   }, [isCaptionsEnabled, status, captionLanguage]);
+
+  // Handle remote captions
+  useEffect(() => {
+    if (isRemoteCaptionsEnabled && status === 'active') {
+      stopRemoteCaptions();
+      initRemoteSpeechRecognition();
+      startRemoteCaptions();
+    } else {
+      stopRemoteCaptions();
+    }
+  }, [isRemoteCaptionsEnabled, status]);
 
   useEffect(() => {
     if (!callId || hasSetupStarted.current) return;
@@ -353,6 +448,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
       if (unsubCallerICE) unsubCallerICE();
       if (unsubReceiverICE) unsubReceiverICE();
       stopCaptions();
+      stopRemoteCaptions();
       cleanupMedia();
     };
   }, [callId, currentUser.id, callType]);
@@ -378,6 +474,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
     }
     setStatus('ended');
     stopCaptions();
+    stopRemoteCaptions();
     cleanupMedia();
 
     if (updateFirebase && callId) {
@@ -490,31 +587,71 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
             <>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-emerald-400">Captions: {captionLanguage}</span>
-                {isCaptionsEnabled && (
+                <div className="flex gap-2">
+                  {isCaptionsEnabled && (
+                    <button
+                      onClick={() => {
+                        const targetLang = Array.isArray(currentUser.targetLanguage) ? currentUser.targetLanguage[0] : currentUser.targetLanguage;
+                        const nativeLang = Array.isArray(currentUser.nativeLanguage) ? currentUser.nativeLanguage[0] : currentUser.nativeLanguage;
+                        setCaptionLanguage(captionLanguage === nativeLang ? targetLang : nativeLang);
+                      }}
+                      className="text-xs bg-white/20 px-2 py-1 rounded hover:bg-white/30 transition-colors"
+                    >
+                      Switch
+                    </button>
+                  )}
                   <button
-                    onClick={() => {
-                      const targetLang = Array.isArray(currentUser.targetLanguage) ? currentUser.targetLanguage[0] : currentUser.targetLanguage;
-                      const nativeLang = Array.isArray(currentUser.nativeLanguage) ? currentUser.nativeLanguage[0] : currentUser.nativeLanguage;
-                      setCaptionLanguage(captionLanguage === nativeLang ? targetLang : nativeLang);
-                    }}
-                    className="text-xs bg-white/20 px-2 py-1 rounded hover:bg-white/30 transition-colors"
+                    onClick={() => setIsRemoteCaptionsEnabled(!isRemoteCaptionsEnabled)}
+                    className={`text-xs px-2 py-1 rounded transition-colors ${
+                      isRemoteCaptionsEnabled ? 'bg-blue-500/20 text-blue-400' : 'bg-white/20 hover:bg-white/30'
+                    }`}
                   >
-                    Switch
+                    Remote {isRemoteCaptionsEnabled ? 'On' : 'Off'}
                   </button>
-                )}
-              </div>
-              {transcriptLines.length > 0 ? (
-                <div>
-                  {transcriptLines.map((line, idx) => <p key={idx}>{line}</p>)}
                 </div>
-              ) : (
-                <p>Captions enabled - start speaking</p>
+              </div>
+
+              {/* Local Transcripts */}
+              {isCaptionsEnabled && (
+                <div className="mb-3">
+                  <div className="text-xs text-emerald-400 font-semibold mb-1">You:</div>
+                  {transcriptLines.length > 0 ? (
+                    <div className="text-white">
+                      {transcriptLines.map((line, idx) => <p key={idx}>{line}</p>)}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 italic">Start speaking...</p>
+                  )}
+                </div>
+              )}
+
+              {/* Remote Transcripts */}
+              {isRemoteCaptionsEnabled && (
+                <div>
+                  <div className="text-xs text-blue-400 font-semibold mb-1">{partner.name}:</div>
+                  {remoteTranscriptLines.length > 0 ? (
+                    <div className="text-white">
+                      {remoteTranscriptLines.map((line, idx) => <p key={idx}>{line}</p>)}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 italic">Waiting for speech...</p>
+                  )}
+                </div>
+              )}
+
+              {!isCaptionsEnabled && !isRemoteCaptionsEnabled && (
+                <p>Captions disabled</p>
               )}
             </>
           ) : (
             <p>Captions not supported in this browser</p>
           )}
-          {recognitionError && <p className="text-red-400 text-xs">{recognitionError}</p>}
+          {(recognitionError || remoteRecognitionError) && (
+            <div className="mt-2 text-red-400 text-xs">
+              {recognitionError && <p>Local: {recognitionError}</p>}
+              {remoteRecognitionError && <p>Remote: {remoteRecognitionError}</p>}
+            </div>
+          )}
         </div>
       )}
 
