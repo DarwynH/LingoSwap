@@ -70,14 +70,11 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
   const [captionLanguage, setCaptionLanguage] = useState<Language>(Array.isArray(currentUser.nativeLanguage) ? currentUser.nativeLanguage[0] : currentUser.nativeLanguage);
   const [remoteTranscriptLines, setRemoteTranscriptLines] = useState<string[]>([]);
-  const [remoteRecognitionError, setRemoteRecognitionError] = useState<string | null>(null);
   const [isRemoteCaptionsEnabled, setIsRemoteCaptionsEnabled] = useState(false);
 
   // Captions refs
   const recognitionRef = useRef<any>(null);
   const recognitionActiveRef = useRef(false);
-  const remoteRecognitionRef = useRef<any>(null);
-  const remoteRecognitionActiveRef = useRef(false);
 
   useEffect(() => {
     const getDevices = async () => {
@@ -133,7 +130,12 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
         }
       }
       if (finalTranscript.trim()) {
-        setTranscriptLines(prev => [...prev, finalTranscript.trim()].slice(-3));
+        const cleanText = finalTranscript.trim();
+        setTranscriptLines(prev => [...prev, cleanText].slice(-3));
+        // Send to partner if remote captions are enabled
+        if (isRemoteCaptionsEnabled) {
+          sendTranscriptToPartner(cleanText);
+        }
       }
     };
 
@@ -173,84 +175,41 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
     }
   };
 
-  const initRemoteSpeechRecognition = () => {
-    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+  // Send transcript to partner via Firestore
+  const sendTranscriptToPartner = async (text: string) => {
+    if (!callId || !text.trim()) return;
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = getLanguageCode(Array.isArray(partner.nativeLanguage) ? partner.nativeLanguage[0] : partner.nativeLanguage);
-
-    recognition.onresult = (event) => {
-      let finalTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript;
-        }
-      }
-      if (finalTranscript.trim()) {
-        setRemoteTranscriptLines(prev => [...prev, finalTranscript.trim()].slice(-3));
-      }
-    };
-
-    recognition.onerror = (event) => {
-      setRemoteRecognitionError(`Remote recognition error: ${event.error}`);
-    };
-
-    recognition.onend = () => {
-      if (isRemoteCaptionsEnabled && status === 'active' && !remoteRecognitionActiveRef.current) {
-        startRemoteCaptions();
-      }
-    };
-
-    remoteRecognitionRef.current = recognition;
-  };
-
-  const startRemoteCaptions = () => {
-    if (!captionsSupported || remoteRecognitionActiveRef.current) return;
-
-    // Try to get remote audio stream
-    if (remoteStreamRef.current && remoteStreamRef.current.getAudioTracks().length > 0) {
-      const remoteAudioTrack = remoteStreamRef.current.getAudioTracks()[0];
-      const remoteAudioStream = new MediaStream([remoteAudioTrack]);
-
-      if (!remoteRecognitionRef.current) {
-        initRemoteSpeechRecognition();
-      }
-
-      if (remoteRecognitionRef.current) {
-        try {
-          // Create a new MediaStreamAudioSourceNode from the remote stream
-          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-          const source = audioContext.createMediaStreamSource(remoteAudioStream);
-          const destination = audioContext.createMediaStreamDestination();
-
-          source.connect(destination);
-
-          // Try to use the processed stream for recognition
-          const processedStream = destination.stream;
-
-          remoteRecognitionRef.current.start();
-          remoteRecognitionActiveRef.current = true;
-          setRemoteRecognitionError(null);
-        } catch (error) {
-          setRemoteRecognitionError('Failed to access remote audio for recognition');
-          console.error('Remote audio recognition setup failed:', error);
-        }
-      }
-    } else {
-      setRemoteRecognitionError('No remote audio stream available');
+    try {
+      const transcriptRef = doc(collection(db, 'calls', callId, 'transcripts'));
+      await addDoc(transcriptRef, {
+        speakerId: currentUser.id,
+        speakerName: currentUser.name,
+        text: text.trim(),
+        language: captionLanguage,
+        timestamp: Date.now(),
+        type: 'caption'
+      });
+    } catch (error) {
+      console.error('Failed to send transcript:', error);
     }
   };
 
-  const stopRemoteCaptions = () => {
-    if (remoteRecognitionRef.current && remoteRecognitionActiveRef.current) {
-      remoteRecognitionRef.current.stop();
-      remoteRecognitionActiveRef.current = false;
-    }
-  };
+  // Listen for partner's transcripts
+  useEffect(() => {
+    if (!callId) return;
+
+    const transcriptsRef = collection(db, 'calls', callId, 'transcripts');
+    const unsubscribe = onSnapshot(transcriptsRef, (snapshot) => {
+      const newTranscripts = snapshot.docs
+        .filter(doc => doc.data().speakerId !== currentUser.id)
+        .map(doc => doc.data().text)
+        .slice(-3); // Keep last 3 remote transcripts
+
+      setRemoteTranscriptLines(newTranscripts);
+    });
+
+    return unsubscribe;
+  }, [callId, currentUser.id]);
 
   // Handle captions toggle and call status changes
   useEffect(() => {
@@ -262,17 +221,6 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
       stopCaptions();
     }
   }, [isCaptionsEnabled, status, captionLanguage]);
-
-  // Handle remote captions
-  useEffect(() => {
-    if (isRemoteCaptionsEnabled && status === 'active') {
-      stopRemoteCaptions();
-      initRemoteSpeechRecognition();
-      startRemoteCaptions();
-    } else {
-      stopRemoteCaptions();
-    }
-  }, [isRemoteCaptionsEnabled, status]);
 
   useEffect(() => {
     if (!callId || hasSetupStarted.current) return;
@@ -448,7 +396,6 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
       if (unsubCallerICE) unsubCallerICE();
       if (unsubReceiverICE) unsubReceiverICE();
       stopCaptions();
-      stopRemoteCaptions();
       cleanupMedia();
     };
   }, [callId, currentUser.id, callType]);
@@ -474,7 +421,6 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
     }
     setStatus('ended');
     stopCaptions();
-    stopRemoteCaptions();
     cleanupMedia();
 
     if (updateFirebase && callId) {
@@ -606,7 +552,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
                       isRemoteCaptionsEnabled ? 'bg-blue-500/20 text-blue-400' : 'bg-white/20 hover:bg-white/30'
                     }`}
                   >
-                    Remote {isRemoteCaptionsEnabled ? 'On' : 'Off'}
+                    Share {isRemoteCaptionsEnabled ? 'On' : 'Off'}
                   </button>
                 </div>
               </div>
@@ -634,7 +580,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
                       {remoteTranscriptLines.map((line, idx) => <p key={idx}>{line}</p>)}
                     </div>
                   ) : (
-                    <p className="text-gray-400 italic">Waiting for speech...</p>
+                    <p className="text-gray-400 italic">Waiting for partner's captions...</p>
                   )}
                 </div>
               )}
@@ -646,10 +592,9 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
           ) : (
             <p>Captions not supported in this browser</p>
           )}
-          {(recognitionError || remoteRecognitionError) && (
+          {recognitionError && (
             <div className="mt-2 text-red-400 text-xs">
-              {recognitionError && <p>Local: {recognitionError}</p>}
-              {remoteRecognitionError && <p>Remote: {remoteRecognitionError}</p>}
+              <p>Local: {recognitionError}</p>
             </div>
           )}
         </div>
