@@ -10,10 +10,10 @@
   --bg-surface:       #ffffff;
   --bg-surface-hover: #eef2f7;
 
-  /* Brand accent — teal/cyan (primary) */
-  --accent-primary:        #0da882;
-  --accent-primary-hover:  #0b9672;
-  --accent-primary-muted:  rgba(13, 168, 130, 0.12);
+  /* Brand accent — blue (primary) */
+  --accent-primary:        #2563eb;
+  --accent-primary-hover:  #1d4ed8;
+  --accent-primary-muted:  rgba(37, 99, 235, 0.12);
 
   /* Secondary accent — warm amber (vocabulary/study) */
   --accent-amber:       #f59e0b;
@@ -31,7 +31,7 @@
   --text-secondary: #556678;
 
   /* Chat bubble colours */
-  --bubble-out-bg:   #0da882;
+  --bubble-out-bg:   #2563eb;
   --bubble-out-text: #ffffff;
   --bubble-in-bg:    #e8eef5;
   --bubble-in-text:  #0d1b2e;
@@ -48,10 +48,10 @@ html.dark {
   --bg-surface:       #132033;
   --bg-surface-hover: #1c2e43;
 
-  /* Brand accent — teal/cyan stays vivid */
-  --accent-primary:        #0dd4a1;
-  --accent-primary-hover:  #0bbf91;
-  --accent-primary-muted:  rgba(13, 212, 161, 0.12);
+  /* Brand accent — blue stays vivid */
+  --accent-primary:        #3b82f6;
+  --accent-primary-hover:  #2563eb;
+  --accent-primary-muted:  rgba(59, 130, 246, 0.12);
 
   /* Secondary accent — warm amber */
   --accent-amber:       #fbbf24;
@@ -69,7 +69,7 @@ html.dark {
   --text-secondary: #7a9ab5;
 
   /* Chat bubble colours */
-  --bubble-out-bg:    #0da882;
+  --bubble-out-bg:    #3b82f6;
   --bubble-out-text:  #ffffff;
   --bubble-in-bg:     #1c2e43;
   --bubble-in-text:   #dde8f2;
@@ -112,7 +112,7 @@ body {
 
 /* ── Landing page hero gradient ── */
 .hero-gradient {
-  background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(13,212,161,0.18) 0%, transparent 70%),
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(59,130,246,0.18) 0%, transparent 70%),
               radial-gradient(ellipse 60% 50% at 80% 100%, rgba(139,92,246,0.12) 0%, transparent 70%);
 }
 

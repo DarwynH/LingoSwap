@@ -115,7 +115,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const timeColor = isMe ? 'opacity-70' : 'text-theme-muted';
   const dividerColor = isMe ? 'border-white/20' : 'border-theme-border';
   const fileCardColor = isMe ? 'bg-white/10 hover:bg-white/20' : 'bg-surface-main/50 hover:bg-surface-hover/80';
-  const fileIconBg = isMe ? 'bg-white text-teal-600' : 'bg-surface-main text-accent-primary';
+  const fileIconBg = isMe ? 'bg-white text-blue-600' : 'bg-surface-main text-accent-primary';
   const fileTextColor = isMe ? 'text-white' : 'text-theme-text';
   const fileSubtextColor = isMe ? 'opacity-70' : 'text-theme-muted';
 

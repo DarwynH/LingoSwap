@@ -14,7 +14,7 @@ const chatPreview = [
 
 const Landing: React.FC<LandingProps> = ({ onNavigateToAuth }) => {
   return (
-    <div className="flex flex-col min-h-[100dvh] bg-[var(--bg-main)] text-[var(--text-primary)] overflow-x-hidden">
+    <div className="flex-1 flex flex-col h-full overflow-y-auto bg-[var(--bg-main)] text-[var(--text-primary)] overflow-x-hidden">
 
       {/* ── NAV ── */}
       <nav className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto w-full">
@@ -51,7 +51,7 @@ const Landing: React.FC<LandingProps> = ({ onNavigateToAuth }) => {
           <h1 className="text-5xl sm:text-6xl md:text-7xl font-black tracking-tight leading-none mb-6">
             <span className="text-[var(--text-primary)]">Chat. Translate.</span>
             <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--accent-primary)] via-teal-400 to-[var(--accent-violet)]">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[var(--accent-primary)] via-blue-400 to-[var(--accent-violet)]">
               Actually Learn.
             </span>
           </h1>
@@ -64,7 +64,7 @@ const Landing: React.FC<LandingProps> = ({ onNavigateToAuth }) => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
             <button
               onClick={() => onNavigateToAuth(false)}
-              className="w-full sm:w-auto px-8 py-3.5 text-base font-bold rounded-xl btn-accent shadow-lg shadow-teal-500/20 active:scale-95 transition-all"
+              className="w-full sm:w-auto px-8 py-3.5 text-base font-bold rounded-xl btn-accent shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
             >
               Start for free
             </button>
@@ -81,7 +81,7 @@ const Landing: React.FC<LandingProps> = ({ onNavigateToAuth }) => {
             {/* Chat header */}
             <div className="flex items-center space-x-3 px-4 py-3 border-b border-[var(--border-color)] bg-[var(--bg-surface)]">
               <div className="relative">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center text-white font-bold text-sm">Y</div>
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-blue-400 flex items-center justify-center text-white font-bold text-sm">Y</div>
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[var(--bg-surface)] rounded-full"></span>
               </div>
               <div>
@@ -203,7 +203,7 @@ const Landing: React.FC<LandingProps> = ({ onNavigateToAuth }) => {
         <p className="text-[var(--text-secondary)] mb-8 max-w-md mx-auto">Create a free account and begin your language exchange journey today.</p>
         <button
           onClick={() => onNavigateToAuth(false)}
-          className="px-10 py-4 text-base font-bold rounded-xl btn-accent shadow-lg shadow-teal-500/20 active:scale-95 transition-all"
+          className="px-10 py-4 text-base font-bold rounded-xl btn-accent shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
         >
           Create free account
         </button>

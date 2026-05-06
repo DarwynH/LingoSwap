@@ -81,10 +81,10 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
       </header>
 
       <div className="p-6 space-y-6 overflow-y-auto">
-        {/* Main Stat Card — Language-learning teal */}
+        {/* Main Stat Card - Midnight Blue Theme */}
         <div
           className="rounded-3xl p-8 text-white shadow-xl relative overflow-hidden transition-transform hover:scale-[1.01]"
-          style={{ background: 'linear-gradient(135deg, var(--accent-primary) 0%, #0a7a60 100%)' }}
+          style={{ background: 'linear-gradient(135deg, var(--accent-primary) 0%, #1e40af 100%)' }}
         >
           <div className="relative z-10">
             <p className="text-white/80 text-sm font-semibold uppercase tracking-widest mb-2">
@@ -136,7 +136,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
                 <div className="w-full bg-surface-hover rounded-full h-1.5 overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${level.progress}%`, background: 'linear-gradient(90deg, var(--accent-primary), #0bc4a0)' }}
+                    style={{ width: `${level.progress}%`, background: 'linear-gradient(90deg, var(--accent-primary), #3b82f6)' }}
                   />
                 </div>
                 <p className="text-[10px] text-theme-muted mt-1">{level.nextThreshold - xp} XP to next level</p>
@@ -194,7 +194,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
                     style={{
                       height: `${heightPercentage}%`,
                       background: isToday
-                        ? 'linear-gradient(to top, var(--accent-primary), #0bc4a0)'
+                        ? 'linear-gradient(to top, var(--accent-primary), #3b82f6)'
                         : 'var(--border-color)'
                     }}
                   ></div>

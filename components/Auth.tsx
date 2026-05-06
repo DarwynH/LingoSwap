@@ -66,12 +66,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onBack, initialIsLogin = true }) =
 
   return (
     <div
-      className="flex flex-col items-center justify-center min-h-screen w-full p-6"
+      className="flex-1 flex flex-col h-full w-full p-4 sm:p-6 overflow-y-auto"
       style={{ background: 'var(--bg-main)' }}
     >
       {/* Card */}
       <div
-        className="max-w-md w-full rounded-2xl shadow-2xl p-8 border"
+        className="max-w-md w-full rounded-2xl shadow-2xl p-8 border m-auto"
         style={{
           background: 'var(--bg-surface)',
           borderColor: 'var(--border-color)',
