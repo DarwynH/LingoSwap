@@ -14,23 +14,52 @@ interface PartnerCardProps {
 
 const PartnerCard: React.FC<PartnerCardProps> = ({ partner, onClick }) => {
   const level = getLevelInfo(partner.xp || 0);
+  const online = isRecentlyOnline(partner.isOnline, partner.lastSeen);
 
   return (
-    <button 
+    <button
       onClick={onClick}
-      className="w-full bg-surface-card p-4 rounded-xl shadow-sm hover:bg-surface-hover backdrop-blur-sm transition-all duration-200 flex items-center space-x-4 text-left border border-theme-border active:scale-[0.98]"
+      className="w-full text-left border border-theme-border rounded-2xl p-4 transition-all duration-200 hover:scale-[1.01] active:scale-[0.98] shadow-sm group"
+      style={{
+        background: 'var(--bg-surface)',
+        borderColor: 'var(--border-color)',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent-primary)')}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-color)')}
     >
-      <Avatar src={partner.avatar} size="lg" online={isRecentlyOnline(partner.isOnline, partner.lastSeen)} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <h4 className="font-bold text-theme-text truncate">{partner.name}</h4>
-          <LevelBadge level={level} size="sm" />
+      <div className="flex items-start space-x-3">
+        <div className="relative flex-shrink-0">
+          <Avatar src={partner.avatar} size="lg" online={online} />
         </div>
-        <p className="text-xs text-theme-muted line-clamp-1 mt-0.5">{partner.bio}</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <LanguageBadge language={partner.nativeLanguage} type="native" />
-          <LanguageBadge language={partner.targetLanguage} type="learning" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="font-bold text-theme-text truncate">{partner.name}</h4>
+            <LevelBadge level={level} size="sm" />
+            {online && (
+              <span
+                className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}
+              >
+                Online
+              </span>
+            )}
+          </div>
+          {partner.bio && (
+            <p className="text-xs text-theme-muted line-clamp-2 mt-0.5 leading-relaxed">{partner.bio}</p>
+          )}
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            <LanguageBadge language={partner.nativeLanguage} type="native" />
+            <LanguageBadge language={partner.targetLanguage} type="learning" />
+          </div>
         </div>
+      </div>
+
+      {/* Chat CTA on hover */}
+      <div
+        className="mt-3 w-full py-1.5 rounded-lg text-xs font-semibold text-center opacity-0 group-hover:opacity-100 transition-opacity"
+        style={{ background: 'var(--accent-primary-muted)', color: 'var(--accent-primary)' }}
+      >
+        Start Conversation →
       </div>
     </button>
   );

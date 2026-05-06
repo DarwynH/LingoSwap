@@ -101,12 +101,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
 
   return (
     <>
-      <nav className="hidden md:flex bg-surface-card border-r border-theme-border flex-col h-full w-64 flex-shrink-0 z-30">
+      <nav className="hidden md:flex bg-surface-card border-r border-theme-border flex-col h-full w-64 flex-shrink-0 z-30" style={{borderRightColor:'var(--border-color)'}}>
         <div className="p-4 h-[72px] flex items-center flex-shrink-0">
-          <div className="w-10 h-10 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0">
+          <div className="w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0">
             <img src="/ndhu_logo.png" alt="LingoSwap Logo" className="w-full h-full object-contain" />
           </div>
-          <span className="font-bold text-xl text-theme-text ml-4 whitespace-nowrap">LingoSwap</span>
+          <span className="font-extrabold text-lg tracking-tight text-theme-text ml-3 whitespace-nowrap">LingoSwap</span>
         </div>
 
         <div className="flex-1 px-3 space-y-2 py-4 overflow-y-auto overflow-x-hidden">
@@ -116,14 +116,15 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
               onClick={() => onTabChange(tab.id)}
               className={`w-full flex items-center p-3 rounded-xl transition-all ${
                 activeTab === tab.id
-                ? 'bg-[#00a884]/10 text-[#00a884]'
+                ? 'text-theme-text'
                 : 'text-theme-muted hover:bg-surface-hover hover:text-theme-text'
               }`}
+              style={activeTab === tab.id ? { background: 'var(--accent-primary-muted)', color: 'var(--accent-primary)' } : {}}
             >
               <div className="flex-shrink-0 flex items-center justify-center w-6 h-6">
                 {tab.icon}
               </div>
-              <span className="font-medium ml-4 whitespace-nowrap">{tab.label}</span>
+              <span className="font-semibold ml-4 whitespace-nowrap">{tab.label}</span>
             </button>
           ))}
         </div>
@@ -161,11 +162,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className={`flex-1 min-w-0 flex flex-col items-center justify-center p-1 transition-colors [&>div>svg]:w-5 [&>div>svg]:h-5 ${
-              activeTab === tab.id ? 'text-[#00a884]' : 'text-theme-muted hover:text-theme-text'
-            }`}
+            className={`flex-1 min-w-0 flex flex-col items-center justify-center p-1 transition-colors [&>div>svg]:w-5 [&>div>svg]:h-5`}
+            style={{ color: activeTab === tab.id ? 'var(--accent-primary)' : '' }}
           >
-            <div className={`p-1 rounded-full transition-all ${activeTab === tab.id ? 'bg-[#00a884]/10 scale-110' : ''}`}>
+            <div
+              className={`p-1 rounded-full transition-all ${activeTab === tab.id ? 'scale-110' : ''}`}
+              style={activeTab === tab.id ? { background: 'var(--accent-primary-muted)' } : {}}
+            >
               {tab.icon}
             </div>
             <span className="text-[9px] font-medium mt-0.5 truncate w-full text-center px-0.5">
@@ -182,7 +185,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="flex flex-col items-center justify-center p-1 transition-all w-full"
             >
-              <div className={`p-[2px] rounded-full transition-shadow ${isMenuOpen ? 'ring-2 ring-[#00a884]' : ''}`}>
+              <div className={`p-[2px] rounded-full transition-shadow ${isMenuOpen ? 'ring-2' : ''}`} style={isMenuOpen ? { ringColor: 'var(--accent-primary)', outline: '2px solid var(--accent-primary)' } : {}}>
                 <Avatar src={user.avatar} size="sm" online />
               </div>
               <span className="text-[9px] font-medium text-theme-muted mt-0.5 truncate w-full text-center px-0.5">

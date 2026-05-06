@@ -103,33 +103,39 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
   };
 
+  // Use CSS variable tokens so light + dark modes both work
+  const bubbleBase = isMe
+    ? 'shadow-sm'
+    : 'shadow-sm border';
+
+  const bubbleStyle: React.CSSProperties = isMe
+    ? { background: 'var(--bubble-out-bg)', color: 'var(--bubble-out-text)' }
+    : { background: 'var(--bubble-in-bg)', color: 'var(--bubble-in-text)', borderColor: 'var(--bubble-in-border)' };
+
+  const timeColor = isMe ? 'opacity-70' : 'text-theme-muted';
+  const dividerColor = isMe ? 'border-white/20' : 'border-theme-border';
+  const fileCardColor = isMe ? 'bg-white/10 hover:bg-white/20' : 'bg-surface-main/50 hover:bg-surface-hover/80';
+  const fileIconBg = isMe ? 'bg-white text-teal-600' : 'bg-surface-main text-accent-primary';
+  const fileTextColor = isMe ? 'text-white' : 'text-theme-text';
+  const fileSubtextColor = isMe ? 'opacity-70' : 'text-theme-muted';
+
   const shapeClasses = isMe
     ? `rounded-2xl ${isGroupStart ? 'rounded-tr-[4px]' : 'rounded-tr-[16px]'} ${isGroupEnd ? 'rounded-br-2xl' : 'rounded-br-[16px]'}`
     : `rounded-2xl ${isGroupStart ? 'rounded-tl-[4px]' : 'rounded-tl-[16px]'} ${isGroupEnd ? 'rounded-bl-2xl' : 'rounded-bl-[16px]'}`;
 
-  const bubbleColor = isMe 
-    ? `bg-blue-600 text-white shadow-sm ${shapeClasses}` 
-    : `bg-gray-800 text-gray-100 shadow-sm border border-gray-700/50 ${shapeClasses}`;
-  
-  const timeColor = isMe ? 'text-blue-100' : 'text-gray-400';
-  const dividerColor = isMe ? 'border-blue-500/50' : 'border-gray-700';
-  const fileCardColor = isMe ? 'bg-white/10 hover:bg-white/20' : 'bg-gray-900/50 hover:bg-gray-700';
-  const fileIconBg = isMe ? 'bg-white text-blue-600' : 'bg-gray-700 text-blue-400';
-  const fileTextColor = isMe ? 'text-white' : 'text-gray-200';
-  const fileSubtextColor = isMe ? 'text-blue-200' : 'text-gray-400';
-
   return (
-    <div className={`max-w-[85%] sm:max-w-[75%] lg:max-w-xl px-3.5 py-2 sm:px-4 sm:py-2.5 relative transition-all duration-200 ${bubbleColor}`}>
+    <div className={`max-w-[85%] sm:max-w-[75%] lg:max-w-xl px-3.5 py-2 sm:px-4 sm:py-2.5 relative transition-all duration-200 ${bubbleBase} ${shapeClasses}`} style={bubbleStyle}>
       
       {/* Reply Context Block */}
       {message.replyTo && (
-        <div 
+      <div 
           onClick={() => onReplyClick && onReplyClick(message.replyTo!.messageId)}
           className={`mb-2 px-3 py-1.5 rounded-lg cursor-pointer transition-colors border-l-4 text-[13px] ${
             isMe 
-              ? 'bg-blue-700/50 border-blue-300 hover:bg-blue-700/80 text-blue-50' 
-              : 'bg-gray-900/40 border-gray-500 hover:bg-gray-900/60 text-gray-300'
+              ? 'border-white/40 hover:bg-white/10' 
+              : 'border-[var(--accent-primary)] hover:bg-black/5'
           }`}
+          style={isMe ? { background: 'rgba(255,255,255,0.1)' } : { background: 'var(--bg-main)' }}
         >
           <div className="font-bold text-[11px] mb-0.5 opacity-90 tracking-wide">
             {message.replyTo.senderName}
@@ -188,7 +194,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       {showTranslation && translatedText && (
         <div className={`mt-2 pt-2 border-t ${dividerColor}`}>
           <div className="flex items-center justify-between mb-1">
-            <p className={`text-[10.5px] font-semibold uppercase tracking-wider ${isMe ? 'text-blue-200/60' : 'text-gray-500'}`}>
+            <p className={`text-[10.5px] font-semibold uppercase tracking-wider ${isMe ? 'opacity-60' : 'text-theme-muted'}`}>
               Translated to {getLanguageDisplayName(translatedWithLang)}
             </p>
             {/* Inline language change button */}
@@ -230,7 +236,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               )}
             </div>
           </div>
-          <p className={`text-[14px] italic break-words leading-relaxed ${isMe ? 'text-blue-100' : 'text-gray-300'}`}>
+          <p className={`text-[14px] italic break-words leading-relaxed ${isMe ? 'opacity-90' : 'text-theme-text'}`}>
             {translatedText}
           </p>
         </div>
@@ -243,7 +249,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             disabled={isTranslating}
             className={`text-[11px] font-semibold tracking-wide uppercase transition-opacity ${
               isTranslating ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-70 cursor-pointer'
-            } ${isMe ? 'text-blue-200' : 'text-blue-400'}`}
+            } ${isMe ? 'text-white/70' : 'text-[var(--accent-primary)]'}`}
           >
             {isTranslating ? '...' : (showTranslation ? 'Hide' : 'A/文')}
           </button>
@@ -278,10 +284,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           
           {isMe && (
             <svg 
-              className={`w-[18px] h-[18px] ml-1.5 transition-all duration-300 ${
+            className={`w-[18px] h-[18px] ml-1.5 transition-all duration-300 ${
                 message.read 
                   ? 'text-amber-400 drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]' 
-                  : 'text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.2)]'
+                  : 'opacity-60 drop-shadow-[0_1px_1px_rgba(0,0,0,0.2)]'
               }`} 
               fill="currentColor" 
               viewBox="0 0 24 24"

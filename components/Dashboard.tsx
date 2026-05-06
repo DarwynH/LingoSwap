@@ -72,7 +72,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
     <div className="flex-1 flex flex-col h-full bg-surface-main">
       <header className="bg-surface-card border-b border-theme-border p-4 flex justify-between items-center">
         <div>
-          <h1 className="text-xl font-bold text-theme-text">Your Progress</h1>
+          <h1 className="text-xl font-extrabold text-theme-text">My Learning</h1>
           <p className="text-xs text-theme-muted">Welcome back, {user.name}!</p>
         </div>
         <div className="flex items-center space-x-3">
@@ -81,60 +81,62 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
       </header>
 
       <div className="p-6 space-y-6 overflow-y-auto">
-        {/* Main Stat Card - Midnight Blue Theme */}
-        <div className="bg-[#162b58] rounded-3xl p-8 text-white shadow-xl relative overflow-hidden transition-transform hover:scale-[1.01]">
+        {/* Main Stat Card — Language-learning teal */}
+        <div
+          className="rounded-3xl p-8 text-white shadow-xl relative overflow-hidden transition-transform hover:scale-[1.01]"
+          style={{ background: 'linear-gradient(135deg, var(--accent-primary) 0%, #0a7a60 100%)' }}
+        >
           <div className="relative z-10">
-            <p className="text-blue-100 text-sm font-semibold uppercase tracking-widest mb-2 opacity-80">
+            <p className="text-white/80 text-sm font-semibold uppercase tracking-widest mb-2">
               Practice Time
             </p>
             <div className="flex items-baseline space-x-2">
               <h2 className="text-6xl font-black tracking-tight">{statsLoading ? '--' : stats.hoursThisWeek}</h2>
-              <span className="text-2xl font-bold text-blue-100">{sessionUnit}</span>
+              <span className="text-2xl font-bold text-white/80">{sessionUnit}</span>
             </div>
-            <p className="mt-4 text-sm text-blue-50 font-medium max-w-xs leading-relaxed">
-              You've spent {statsLoading ? '...' : `${stats.hoursThisWeek} ${sessionUnit.toLowerCase()}`} practicing {user.targetLanguage}.
-              <span className="block mt-1 opacity-75">Keep pushing toward your goal!</span>
+            <p className="mt-4 text-sm text-white/70 font-medium max-w-xs leading-relaxed">
+              You've spent {statsLoading ? '…' : `${stats.hoursThisWeek} ${sessionUnit.toLowerCase()}`} practicing {user.targetLanguage}.
+              <span className="block mt-1 opacity-80">Keep pushing toward your goal!</span>
             </p>
           </div>
-
-          {/* Background Icon - Updated for subtle contrast */}
+          {/* Background icon */}
           <div className="absolute top-0 right-0 p-8 text-white opacity-10 rotate-12">
             <svg className="w-36 h-36" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
             </svg>
           </div>
         </div>
 
         {/* Small Stat Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border">
-            <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Current Streak</p>
+          <div className="bg-surface-card p-5 rounded-2xl shadow-sm border border-theme-border">
+            <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1.5">Current Streak</p>
             <div className="flex items-center space-x-2">
-              <span className="text-2xl font-bold text-orange-500">{statsLoading ? '--' : stats.streak} Days</span>
-              <span className="text-xl">🔥</span>
+              <span className="text-2xl font-black text-orange-500">{statsLoading ? '--' : stats.streak}</span>
+              <span className="text-lg">🔥</span>
+              <span className="text-sm font-semibold text-theme-muted">days</span>
             </div>
           </div>
-          <div className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border">
-            <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Sessions</p>
+          <div className="bg-surface-card p-5 rounded-2xl shadow-sm border border-theme-border">
+            <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1.5">Chat Sessions</p>
             <div className="flex items-center space-x-2">
-              <span className="text-2xl font-bold text-blue-500">{stats.sessionsCount}</span>
-              <span className="text-xl">💬</span>
+              <span className="text-2xl font-black" style={{ color: 'var(--accent-primary)' }}>{stats.sessionsCount}</span>
+              <span className="text-lg">💬</span>
             </div>
           </div>
 
-          {/* XP Card */}
-          <div className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border">
-            <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Total XP</p>
+          <div className="bg-surface-card p-5 rounded-2xl shadow-sm border border-theme-border">
+            <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1.5">Total XP</p>
             <div className="flex items-center space-x-2">
-              <span className="text-2xl font-bold text-emerald-500">{xp}</span>
-              <span className="text-xl">⚡</span>
+              <span className="text-2xl font-black text-emerald-500">{xp}</span>
+              <span className="text-lg">⚡</span>
             </div>
             {level.nextThreshold !== null && (
               <div className="mt-2">
                 <div className="w-full bg-surface-hover rounded-full h-1.5 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500"
-                    style={{ width: `${level.progress}%` }}
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${level.progress}%`, background: 'linear-gradient(90deg, var(--accent-primary), #0bc4a0)' }}
                   />
                 </div>
                 <p className="text-[10px] text-theme-muted mt-1">{level.nextThreshold - xp} XP to next level</p>
@@ -142,22 +144,21 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
             )}
           </div>
 
-          {/* Daily Quests Summary */}
           <button
             onClick={onNavigateToProgress}
-            className="bg-surface-card p-6 rounded-2xl shadow-sm border border-theme-border text-left hover:border-amber-500/30 transition-colors group"
+            className="bg-surface-card p-5 rounded-2xl shadow-sm border border-theme-border text-left hover:border-[var(--accent-amber)]/50 transition-colors group"
           >
-            <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1">Daily Quests</p>
+            <p className="text-theme-muted text-xs font-bold uppercase tracking-wider mb-1.5">Daily Quests</p>
             <div className="flex items-center space-x-2">
-              <span className="text-2xl font-bold text-amber-500">{completedQuests}/{totalQuests}</span>
-              <span className="text-xl">📋</span>
+              <span className="text-2xl font-black text-amber-500">{completedQuests}/{totalQuests}</span>
+              <span className="text-lg">📋</span>
             </div>
             {unclaimedQuests > 0 && (
               <p className="text-[10px] text-amber-500 font-semibold mt-1 animate-pulse">
                 {unclaimedQuests} reward{unclaimedQuests > 1 ? 's' : ''} to claim!
               </p>
             )}
-            <p className="text-[10px] text-theme-muted mt-1 group-hover:text-[#00a884] transition-colors">
+            <p className="text-[10px] text-theme-muted mt-1 group-hover:text-[var(--accent-primary)] transition-colors">
               View Progress →
             </p>
           </button>
@@ -185,11 +186,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
                   </div>
 
                   <div
-                    className={`w-full rounded-t-lg transition-all duration-700 ease-out shadow-sm ${isToday
-                      ? 'bg-gradient-to-t from-[#a0adc8] to-white scale-105'
-                      : 'bg-[#d8dce3] hover:bg-[#a0adc8]'
-                      }`}
-                    style={{ height: `${heightPercentage}%` }}
+                    className={`w-full rounded-t-lg transition-all duration-700 ease-out shadow-sm ${
+                      isToday
+                       ? 'scale-105'
+                       : 'hover:opacity-80'
+                    }`}
+                    style={{
+                      height: `${heightPercentage}%`,
+                      background: isToday
+                        ? 'linear-gradient(to top, var(--accent-primary), #0bc4a0)'
+                        : 'var(--border-color)'
+                    }}
                   ></div>
 
                   <span className={`text-[10px] mt-3 font-bold ${isToday ? 'text-theme-text' : 'text-theme-muted'}`}>

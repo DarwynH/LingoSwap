@@ -159,7 +159,10 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }
       {/* Header & Tabs */}
       <div className="flex-none bg-surface-main/80 backdrop-blur-xl border-b border-theme-border p-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="flex items-center justify-between mb-4 px-2">
-          <h2 className="text-xl font-bold">Saved Items</h2>
+          <div>
+            <h2 className="text-xl font-extrabold">Study Library</h2>
+            <p className="text-xs text-theme-muted mt-0.5">Phrases, vocabulary &amp; review items from your chats</p>
+          </div>
           {reviewItems.length > 0 && activeTab !== 'study_later' && activeTab !== 'vocabulary' && (
             <div className="flex items-center space-x-2">
               <button
@@ -427,7 +430,7 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }
               displayedVocabItems.map(item => (
                 <div 
                   key={item.id} 
-                  className="bg-surface-card border border-theme-border/50 rounded-2xl p-4 shadow-sm transition-all hover:border-gray-600 cursor-pointer group"
+                  className="bg-surface-card border border-theme-border/50 rounded-2xl p-4 shadow-sm transition-all hover:border-[var(--accent-primary)]/30 cursor-pointer group"
                   onClick={() => setSelectedVocabItemId(item.id)}
                 >
                   <div className="flex justify-between items-start mb-2">
@@ -519,7 +522,7 @@ const SavedItemsView: React.FC<SavedItemsViewProps> = ({ user, onJumpToMessage }
             </div>
           ) : (
             filteredItems.map(item => (
-              <div key={item.id} className="bg-surface-card border border-theme-border/50 rounded-2xl p-4 shadow-sm transition-all hover:border-gray-600">
+              <div key={item.id} className="bg-surface-card border border-theme-border/50 rounded-2xl p-4 shadow-sm transition-all hover:border-[var(--accent-primary)]/30">
                 
                 {/* Header Row */}
                 <div className="flex justify-between items-start mb-3">
