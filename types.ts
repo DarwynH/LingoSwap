@@ -29,6 +29,8 @@ export interface UserProfile {
   favoriteMessages?: string[];
   xp?: number;
   questData?: QuestData;
+  chatSessionCount?: number;
+  messagedChatIds?: string[];
 }
 
 // Gamification Types
