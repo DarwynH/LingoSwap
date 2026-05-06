@@ -9,10 +9,11 @@ import { isRecentlyOnline } from '../../utils/presenceUtils';
 
 interface PartnerCardProps {
   partner: UserProfile;
+  matchBadge?: string | null;
   onClick: () => void;
 }
 
-const PartnerCard: React.FC<PartnerCardProps> = ({ partner, onClick }) => {
+const PartnerCard: React.FC<PartnerCardProps> = ({ partner, matchBadge, onClick }) => {
   const level = getLevelInfo(partner.xp || 0);
   const online = isRecentlyOnline(partner.isOnline, partner.lastSeen);
 
@@ -41,6 +42,17 @@ const PartnerCard: React.FC<PartnerCardProps> = ({ partner, onClick }) => {
                 style={{ background: 'rgba(16,185,129,0.12)', color: '#10b981' }}
               >
                 Online
+              </span>
+            )}
+            {matchBadge && (
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{ 
+                  background: matchBadge === 'Best Match' ? 'var(--accent-primary-muted)' : 'rgba(139, 92, 246, 0.1)', 
+                  color: matchBadge === 'Best Match' ? 'var(--accent-primary)' : '#8b5cf6' 
+                }}
+              >
+                {matchBadge === 'Best Match' ? '✨ Best Match' : matchBadge}
               </span>
             )}
           </div>

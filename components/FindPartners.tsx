@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import PartnerCard from './Dashboard/PartnerCard';
+import { sortPartnersByMatch, isReciprocalMatch, getMatchDescription } from '../utils/matching';
 
 interface FindPartnersProps {
   user: UserProfile;
@@ -37,12 +38,9 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
   );
 
   // Logic to separate "Perfect Matches" from "Global Community"
-  const suggestedPartners = filteredPartners.filter(p =>
-    p.nativeLanguage === user.targetLanguage &&
-    p.targetLanguage === user.nativeLanguage
-  );
-
-  const otherPartners = filteredPartners.filter(p => !suggestedPartners.includes(p));
+  const sortedPartners = sortPartnersByMatch(user, filteredPartners);
+  const suggestedPartners = sortedPartners.filter(p => isReciprocalMatch(user, p));
+  const otherPartners = sortedPartners.filter(p => !isReciprocalMatch(user, p));
 
   if (loading) return (
     <div className="flex-1 flex flex-col h-full bg-surface-main items-center justify-center p-8 text-center text-theme-muted">
@@ -107,6 +105,7 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
                     <PartnerCard
                       key={partner.id}
                       partner={partner}
+                      matchBadge={getMatchDescription(user, partner)}
                       onClick={() => {
                         const chatId = [user.id, partner.id].sort().join('_');
                         onStartChat(partner, chatId);
@@ -125,6 +124,7 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
                     <PartnerCard
                       key={partner.id}
                       partner={partner}
+                      matchBadge={getMatchDescription(user, partner)}
                       onClick={() => {
                         const chatId = [user.id, partner.id].sort().join('_');
                         onStartChat(partner, chatId);
