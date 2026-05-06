@@ -27,9 +27,12 @@ import WordActionPopup from './Chat/WordActionPopup';
 import ChatHeaderMenu from './Chat/ChatHeaderMenu';
 import ChatSearchBar from './Chat/ChatSearchBar';
 import AttachmentPreviewModal from './Chat/AttachmentPreviewModal';
+import IdiomExplanationModal from './Chat/IdiomExplanationModal';
 import { createPortal } from 'react-dom';
 import { recordActions } from '../services/gamificationService';
 import { resolveDeepLTarget } from '../services/translationService';
+import { isRecentlyOnline, formatLastSeen } from '../utils/presenceUtils';
+import { recordUserActivityAfterMessage } from '../services/progressService';
 
 interface ChatRoomProps {
   user: UserProfile;
@@ -88,6 +91,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
 
   // Status and active UI states
   const [isPartnerOnline, setIsPartnerOnline] = useState(false);
+  const [partnerLastSeenText, setPartnerLastSeenText] = useState('Offline');
   const [menuConfig, setMenuConfig] = useState<{ 
     id: string; 
     rect: { top: number; bottom: number; left: number; right: number };
@@ -109,6 +113,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
     messageId: string;
     sourceText: string;
   } | null>(null);
+
+  // Idiom/Slang Explanation State
+  const [explainPhraseText, setExplainPhraseText] = useState<string | null>(null);
 
   // Header menu & search state
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
@@ -230,10 +237,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
     const checkPresence = () => {
       if (!partnerStatus) {
         setIsPartnerOnline(false);
+        setPartnerLastSeenText('Offline');
         return;
       }
-      const isRecent = partnerStatus.lastSeen ? Date.now() - partnerStatus.lastSeen < 120000 : false;
-      setIsPartnerOnline((partnerStatus.isOnline || false) && isRecent);
+      const isOnlineNow = isRecentlyOnline(partnerStatus.isOnline, partnerStatus.lastSeen);
+      setIsPartnerOnline(isOnlineNow);
+      setPartnerLastSeenText(formatLastSeen(partnerStatus.lastSeen, partnerStatus.isOnline, partnerStatus.showActiveStatus));
     };
 
     checkPresence();
@@ -491,6 +500,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       recordActions(user.id, [
         { xpAction: isReply ? 'replySent' : 'messageSent', questUpdates },
       ]).catch((e) => console.warn('Gamification update failed:', e));
+      
+      // Update progress, streak, and weekly activity
+      recordUserActivityAfterMessage(user.id, session.id).catch((e) => console.warn('Chat session update failed:', e));
+      
       setReplyTarget(null);
     } catch (error) {
       console.error('Chat send error:', error);
@@ -740,7 +753,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-theme-text text-[16px] leading-tight truncate">{session.partner.name}</h3>
-              <p className="text-[13px] text-theme-muted truncate mt-0.5">{isPartnerOnline ? 'Active now' : 'Offline'}</p>
+              <p className="text-[13px] text-theme-muted truncate mt-0.5">{partnerLastSeenText}</p>
             </div>
           </div>
           
@@ -909,6 +922,30 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
                       className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-theme-text hover:bg-surface-hover hover:text-white transition-colors"
                     >
                       Reply
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const selection = window.getSelection()?.toString().trim();
+                        if (selection) {
+                          setExplainPhraseText(selection);
+                        } else {
+                          const text = msg.text || '';
+                          if (text.length > 0 && text.length <= 60) {
+                            setExplainPhraseText(text);
+                          } else {
+                            const input = window.prompt("Enter the slang or idiom phrase to explain:");
+                            if (input && input.trim()) {
+                              setExplainPhraseText(input.trim());
+                            }
+                          }
+                        }
+                        setMenuConfig(null);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-blue-400 hover:bg-surface-hover hover:text-blue-300 transition-colors"
+                    >
+                      Explain phrase
                     </button>
 
                     <button
@@ -1087,6 +1124,15 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
           attachment={pendingAttachment}
           onClose={handleCancelAttachment}
           onSend={(caption) => confirmAndUploadAttachment(caption, pendingAttachment)}
+        />
+      )}
+
+      {/* Idiom Explanation Modal */}
+      {explainPhraseText && (
+        <IdiomExplanationModal
+          phrase={explainPhraseText}
+          preferredLanguage={currentMessageTarget}
+          onClose={() => setExplainPhraseText(null)}
         />
       )}
     </div>

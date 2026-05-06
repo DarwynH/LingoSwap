@@ -3,7 +3,7 @@ import { db } from '../firebase';
 import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore';
 import { UserProfile, ConversationPreview } from '../types';
 import Avatar from './ui/Avatar';
-import { formatLastSeen } from '../hooks/usePresence';
+import { formatLastSeen, isRecentlyOnline, getPresenceDotColor } from '../utils/presenceUtils';
 
 interface ChatsListProps {
   user: UserProfile;
@@ -50,12 +50,12 @@ const ChatsList: React.FC<ChatsListProps> = ({ user, onSelectChat }) => {
     const status = presenceStatuses.get(partnerId);
     if (!status) return null;
     
-    const isOnline = status.isOnline && (Date.now() - (status.lastSeen || 0) < 120000);
+    const isOnline = isRecentlyOnline(status.isOnline, status.lastSeen);
     const showActiveStatus = status.showActiveStatus !== false;
     
     return {
       isOnline,
-      lastSeenText: formatLastSeen(status.lastSeen, isOnline, showActiveStatus)
+      lastSeenText: formatLastSeen(status.lastSeen, status.isOnline, showActiveStatus)
     };
   };
 

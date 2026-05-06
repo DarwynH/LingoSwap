@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import PartnerCard from './Dashboard/PartnerCard';
+import { sortPartnersByMatch, isReciprocalMatch, getMatchDescription } from '../utils/matching';
 
 interface FindPartnersProps {
   user: UserProfile;
@@ -37,12 +38,9 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
   );
 
   // Logic to separate "Perfect Matches" from "Global Community"
-  const suggestedPartners = filteredPartners.filter(p =>
-    p.nativeLanguage === user.targetLanguage &&
-    p.targetLanguage === user.nativeLanguage
-  );
-
-  const otherPartners = filteredPartners.filter(p => !suggestedPartners.includes(p));
+  const sortedPartners = sortPartnersByMatch(user, filteredPartners);
+  const suggestedPartners = sortedPartners.filter(p => isReciprocalMatch(user, p));
+  const otherPartners = sortedPartners.filter(p => !isReciprocalMatch(user, p));
 
   if (loading) return (
     <div className="flex-1 flex flex-col h-full bg-surface-main items-center justify-center p-8 text-center text-theme-muted">
@@ -53,18 +51,20 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
   return (
     <div className="flex-1 flex flex-col h-full bg-surface-main">
       <header className="bg-surface-card/90 backdrop-blur-md border-b border-theme-border p-4">
-        <h1 className="text-xl font-bold text-theme-text">Find Partners</h1>
-        <p className="text-xs text-theme-muted mb-4">Connect with native speakers from around the world.</p>
+        <h1 className="text-xl font-extrabold text-theme-text">Discover Partners</h1>
+        <p className="text-xs text-theme-muted mb-4">Find native speakers who are learning your language — the perfect exchange.</p>
         
         {/* Search Input */}
         <div className="relative group">
           <svg className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors ${searchQuery ? 'text-theme-text' : 'text-theme-muted'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           <input
             type="text"
-            placeholder="Search users by name..."
+            placeholder="Search by name or language..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-surface-base border border-theme-border text-theme-text text-sm rounded-xl pl-9 pr-10 py-2.5 outline-none transition-colors shadow-sm placeholder-theme-muted focus:border-[#00a884] focus:ring-1 focus:ring-[#00a884]"
+            className="w-full bg-surface-main border border-theme-border text-theme-text text-sm rounded-xl pl-9 pr-10 py-2.5 outline-none transition-all shadow-sm placeholder-theme-muted"
+            onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent-primary)')}
+            onBlur={e => (e.currentTarget.style.borderColor = '')}
           />
           {searchQuery && (
             <button 
@@ -94,14 +94,18 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
             {suggestedPartners.length > 0 && (
               <section>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-bold text-theme-muted uppercase tracking-widest">Perfect Matches</h3>
-                  <span className="bg-[#00a884]/10 text-[#00a884] text-[10px] px-2 py-0.5 rounded-full font-bold">Recommended</span>
+                  <h3 className="text-xs font-bold text-theme-muted uppercase tracking-widest">✦ Perfect Matches</h3>
+                  <span
+                    className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                    style={{ background: 'var(--accent-primary-muted)', color: 'var(--accent-primary)' }}
+                  >Recommended</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {suggestedPartners.map(partner => (
                     <PartnerCard
                       key={partner.id}
                       partner={partner}
+                      matchBadge={getMatchDescription(user, partner)}
                       onClick={() => {
                         const chatId = [user.id, partner.id].sort().join('_');
                         onStartChat(partner, chatId);
@@ -114,12 +118,13 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
 
             {otherPartners.length > 0 && (
               <section>
-                <h3 className="text-xs font-bold text-theme-muted mb-4 uppercase tracking-widest">Global Community</h3>
+                <h3 className="text-xs font-bold text-theme-muted mb-4 uppercase tracking-widest">🌍 Global Community</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {otherPartners.map(partner => (
                     <PartnerCard
                       key={partner.id}
                       partner={partner}
+                      matchBadge={getMatchDescription(user, partner)}
                       onClick={() => {
                         const chatId = [user.id, partner.id].sort().join('_');
                         onStartChat(partner, chatId);

@@ -79,22 +79,4 @@ export const usePresence = (userId: string) => {
 
   return { status, updateOwnPresence, startHeartbeat, stopHeartbeat };
 };
-
-// Format last seen text
-export const formatLastSeen = (lastSeen: number, isOnline: boolean, showActiveStatus: boolean): string => {
-  if (!showActiveStatus) return 'Offline';
-  if (isOnline) return 'Active now';
-  
-  const now = Date.now();
-  const diff = now - lastSeen;
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days = Math.floor(diff / 86400000);
-  
-  if (minutes < 1) return 'Active just now';
-  if (minutes < 60) return `Active ${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-  if (hours < 24) return `Active ${hours} hour${hours > 1 ? 's' : ''} ago`;
-  if (days < 7) return `Active ${days} day${days > 1 ? 's' : ''} ago`;
-  
-  return `Last seen ${new Date(lastSeen).toLocaleDateString()}`;
-};
+

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { doc, updateDoc, deleteDoc, increment } from 'firebase/firestore';
 import { SavedVocabularyItem } from '../types';
+import { recordUserActivity } from '../services/progressService';
 
 interface VocabDetailPopupProps {
   item: SavedVocabularyItem;
@@ -54,6 +55,7 @@ const VocabDetailPopup: React.FC<VocabDetailPopupProps> = ({ item, onClose }) =>
         lastReviewedAt: Date.now(),
         difficulty
       });
+      await recordUserActivity(item.userId, 'reviewCompleted');
     } catch (err) {
       console.error('Failed to mark reviewed:', err);
     }

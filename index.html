@@ -4,7 +4,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LingoSwap</title>
+  <title>LingoSwap — Chat, Translate & Learn Languages</title>
+  <meta name="description" content="LingoSwap connects language learners with native speakers for real-time chat, in-chat translation, and phrase saving. Start your language exchange journey today.">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -13,49 +14,36 @@
         extend: {
           colors: {
             surface: {
-              main: 'var(--bg-main)',
-              card: 'var(--bg-surface)',
-              hover: 'var(--bg-surface-hover)'
+              main:  'var(--bg-main)',
+              card:  'var(--bg-surface)',
+              hover: 'var(--bg-surface-hover)',
+              base:  'var(--bg-main)'
             },
             theme: {
               border: 'var(--border-color)',
-              text: 'var(--text-primary)',
-              muted: 'var(--text-secondary)'
+              text:   'var(--text-primary)',
+              muted:  'var(--text-secondary)'
+            },
+            accent: {
+              primary: 'var(--accent-primary)',
+              amber:   'var(--accent-amber)',
+              violet:  'var(--accent-violet)'
             }
           }
         }
       }
     }
   </script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg-main: #f0f2f5;
-      --bg-surface: #ffffff;
-      --bg-surface-hover: #f8fafc;
-      --border-color: #e2e8f0;
-      --text-primary: #0f172a;
-      --text-secondary: #64748b;
-    }
-    html.dark {
-      --bg-main: #0f172a;
-      --bg-surface: #1e293b;
-      --bg-surface-hover: #334155;
-      --border-color: rgba(51, 65, 85, 0.5);
-      --text-primary: #f1f5f9;
-      --text-secondary: #94a3b8;
-    }
-    body {
-      font-family: 'Inter', sans-serif;
-      background-color: var(--bg-main);
-      color: var(--text-primary);
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Inline early-paint theme to prevent flash -->
   <script>
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-      document.documentElement.classList.add('dark');
-    }
+    (function() {
+      var saved = localStorage.getItem('theme');
+      var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'dark' || (!saved && prefersDark)) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
   </script>
 <script type="importmap">
 {
