@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, QuestData } from '../types';
 import LevelBadge from './ui/LevelBadge';
-import { getDailyActiveSessions } from '../services/sessionService';
+
 import { getLevelInfo, getOrResetDailyQuests } from '../services/gamificationService';
 import { db } from '../firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -21,6 +21,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
   const [currentStreak, setCurrentStreak] = useState(user.streakCount || 0);
   const [totalSessionSeconds, setTotalSessionSeconds] = useState(0);
   const [statsLoading, setStatsLoading] = useState(true);
+  const [weeklyActivityData, setWeeklyActivityData] = useState<{ dayLabel: string; count: number; isToday: boolean }[]>([]);
 
   // 2. We removed the fetchSessions logic because we now read chatSessionCount directly from the user document snapshot.
 
@@ -35,11 +36,30 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
         if (data.questData) {
           setQuestData(data.questData as QuestData);
         }
-        setActiveSessions(Number(data.chatSessionCount ?? data.sessionCount ?? data.sessions ?? 0) || 0);
+        setActiveSessions(Number(data.chatSessions ?? data.chatSessionCount ?? data.sessionCount ?? data.sessions ?? 0) || 0);
+
+        // Generate last 7 days data
+        const activityByDate = data.activityByDate || data.weeklyActivity || {};
+        const last7Days = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
+          
+          const count = Number(activityByDate[dateStr]) || 0;
+          const dayLabel = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d.getDay()];
+          last7Days.push({ dayLabel, count, isToday: i === 0 });
+        }
+        setWeeklyActivityData(last7Days);
       } else {
         setCurrentStreak(0);
         setTotalSessionSeconds(0);
         setActiveSessions(0);
+        setWeeklyActivityData([]);
       }
       setStatsLoading(false);
     });
@@ -175,14 +195,15 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
 
           <div className="flex items-end justify-between h-44 px-2 gap-3">
             {/* This now uses your real user data */}
-            {(user.dailyStats || [0, 0, 0, 0, 0, 0, 0]).map((minutes, i) => {
-              const heightPercentage = Math.max((minutes / 60) * 100, 4);
-              const isToday = i === new Date().getDay();
+            {(weeklyActivityData.length > 0 ? weeklyActivityData : [0,0,0,0,0,0,0].map((_, i) => ({ dayLabel: ['S','M','T','W','T','F','S'][(new Date().getDay() - 6 + i + 7) % 7], count: 0, isToday: i === 6 }))).map((data, i) => {
+              const { count, isToday, dayLabel } = data;
+              // Let's cap the visual height at some value, say 10 messages = 100% height
+              const heightPercentage = Math.min(Math.max((count / 10) * 100, 4), 100);
 
               return (
                 <div key={i} className="flex flex-col items-center flex-1 h-full justify-end group relative">
-                  <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800 text-white text-[10px] px-2 py-1 rounded pointer-events-none">
-                    {Math.round(minutes)}m
+                  <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800 text-white text-[10px] px-2 py-1 rounded pointer-events-none whitespace-nowrap">
+                    {count} msg{count !== 1 ? 's' : ''}
                   </div>
 
                   <div
@@ -200,7 +221,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
                   ></div>
 
                   <span className={`text-[10px] mt-3 font-bold ${isToday ? 'text-theme-text' : 'text-theme-muted'}`}>
-                    {['S', 'M', 'T', 'W', 'T', 'F', 'S'][i]}
+                    {dayLabel}
                   </span>
                 </div>
               );

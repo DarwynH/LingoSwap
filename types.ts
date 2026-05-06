@@ -30,7 +30,11 @@ export interface UserProfile {
   xp?: number;
   questData?: QuestData;
   chatSessionCount?: number;
+  chatSessions?: number;
   messagedChatIds?: string[];
+  activityByDate?: Record<string, number>;
+  longestStreak?: number;
+  lastActiveDate?: string;
 }
 
 // Gamification Types

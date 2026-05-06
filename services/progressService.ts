@@ -47,7 +47,7 @@ function daysBetweenLocalDates(fromDateString: string | undefined, toDateString:
 
 export function getStreakFromUserData(data: Record<string, any> | undefined): number {
   if (!data) return 0;
-  return Number(data.currentStreak ?? data.streak ?? data.streakCount ?? 0) || 0;
+  return Number(data.currentStreak ?? data.streakCount ?? data.streak ?? 0) || 0;
 }
 
 export function getSessionSecondsFromUserData(data: Record<string, any> | undefined): number {
@@ -75,29 +75,97 @@ export async function updateDailyStreak(userId: string): Promise<void> {
     const userSnap = await transaction.get(userRef);
     const data = userSnap.exists() ? userSnap.data() : {};
     const previousStreak = getStreakFromUserData(data);
-    const lastActiveDate = data.lastActiveDate || data.lastStudyDate;
+    const lastActiveDate = data.lastActiveDate ?? data.lastStudyDate;
+    const activityByDate = data.activityByDate ?? data.weeklyActivity ?? {};
 
-    if (lastActiveDate === today) {
-      transaction.set(userRef, { updatedAt: serverTimestamp() }, { merge: true });
-      return;
+    const updates: Record<string, any> = {
+      updatedAt: serverTimestamp(),
+    };
+
+    if (lastActiveDate !== today) {
+      const dayGap = daysBetweenLocalDates(lastActiveDate, today);
+      const nextStreak = dayGap === 1 ? previousStreak + 1 : 1;
+      const longestStreak = Math.max(Number(data.longestStreak ?? 0) || 0, nextStreak);
+
+      updates.currentStreak = nextStreak;
+      updates.streakCount = nextStreak;
+      updates.longestStreak = longestStreak;
+      updates.lastActiveDate = today;
     }
 
-    const dayGap = daysBetweenLocalDates(lastActiveDate, today);
-    const nextStreak = dayGap === 1 ? previousStreak + 1 : 1;
-    const longestStreak = Math.max(Number(data.longestStreak ?? 0) || 0, nextStreak);
+    const todayCount = Number(activityByDate[today] || 0) + 1;
+    updates.activityByDate = {
+      ...activityByDate,
+      [today]: todayCount,
+    };
 
-    transaction.set(userRef, {
-      currentStreak: nextStreak,
-      streakCount: nextStreak,
-      longestStreak,
-      lastActiveDate: today,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+    transaction.set(userRef, updates, { merge: true });
   });
 }
 
 export async function recordUserActivity(userId: string, _activityType: ActivityType): Promise<void> {
-  await updateDailyStreak(userId);
+  try {
+    await updateDailyStreak(userId);
+  } catch (error) {
+    console.warn("Failed to record general user activity:", error);
+  }
+}
+
+export async function recordUserActivityAfterMessage(userId: string, chatId: string): Promise<void> {
+  if (!userId || !chatId) return;
+
+  const userRef = doc(db, 'users', userId);
+  const today = getLocalDateString();
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const userSnap = await transaction.get(userRef);
+      const data = userSnap.exists() ? userSnap.data() : {};
+
+      const chatSessions = Number(data.chatSessions ?? data.chatSessionCount ?? data.sessionCount ?? data.sessions ?? 0) || 0;
+      const messagedChatIds = Array.isArray(data.messagedChatIds) ? data.messagedChatIds : [];
+
+      const previousStreak = getStreakFromUserData(data);
+      const lastActiveDate = data.lastActiveDate ?? data.lastStudyDate;
+
+      const activityByDate = data.activityByDate ?? data.weeklyActivity ?? {};
+
+      const updates: Record<string, any> = {
+        updatedAt: serverTimestamp(),
+        lastChatActivityAt: serverTimestamp(),
+      };
+
+      // 1. Chat Sessions
+      if (!messagedChatIds.includes(chatId)) {
+        updates.chatSessions = chatSessions + 1;
+        updates.chatSessionCount = chatSessions + 1; // Keep backward compat
+        updates.messagedChatIds = [...messagedChatIds, chatId];
+      }
+
+      // 2. Streak Update
+      if (lastActiveDate !== today) {
+        const dayGap = daysBetweenLocalDates(lastActiveDate, today);
+        const nextStreak = (dayGap === 1) ? previousStreak + 1 : 1;
+        const longestStreak = Math.max(Number(data.longestStreak ?? 0) || 0, nextStreak);
+
+        updates.currentStreak = nextStreak;
+        updates.streakCount = nextStreak;
+        updates.longestStreak = longestStreak;
+        updates.lastActiveDate = today;
+      }
+
+      // 3. Weekly Activity
+      const todayCount = Number(activityByDate[today] || 0) + 1;
+      updates.activityByDate = {
+        ...activityByDate,
+        [today]: todayCount,
+      };
+
+      transaction.set(userRef, updates, { merge: true });
+    });
+  } catch (error) {
+    console.warn("Failed to record user activity after message:", error);
+  }
 }
 
 export async function flushSessionTime(userId: string, seconds: number): Promise<void> {
