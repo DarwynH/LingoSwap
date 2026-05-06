@@ -32,6 +32,7 @@ import { createPortal } from 'react-dom';
 import { recordActions } from '../services/gamificationService';
 import { resolveDeepLTarget } from '../services/translationService';
 import { isRecentlyOnline, formatLastSeen } from '../utils/presenceUtils';
+import { recordChatActivity } from '../services/sessionService';
 
 interface ChatRoomProps {
   user: UserProfile;
@@ -499,6 +500,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       recordActions(user.id, [
         { xpAction: isReply ? 'replySent' : 'messageSent', questUpdates },
       ]).catch((e) => console.warn('Gamification update failed:', e));
+      
+      // Update chat session counter
+      recordChatActivity(user.id, session.id).catch((e) => console.warn('Chat session update failed:', e));
+      
       setReplyTarget(null);
     } catch (error) {
       console.error('Chat send error:', error);

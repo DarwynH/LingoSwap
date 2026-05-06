@@ -53,16 +53,18 @@ export function getStreakFromUserData(data: Record<string, any> | undefined): nu
 export function getSessionSecondsFromUserData(data: Record<string, any> | undefined): number {
   if (!data) return 0;
 
+  let total = 0;
+
   const seconds = data.totalSessionSeconds ?? data.activeSeconds;
-  if (typeof seconds === 'number') return Math.max(0, seconds);
+  if (typeof seconds === 'number') total += Math.max(0, seconds);
 
   const minutes = data.sessionMinutes ?? data.totalSessionMinutes ?? data.studyMinutes;
-  if (typeof minutes === 'number') return Math.max(0, Math.round(minutes * 60));
+  if (typeof minutes === 'number') total += Math.max(0, Math.round(minutes * 60));
 
   const hours = data.totalStudyHours ?? data.totalStudyTime;
-  if (typeof hours === 'number') return Math.max(0, Math.round(hours * 3600));
+  if (typeof hours === 'number') total += Math.max(0, Math.round(hours * 3600));
 
-  return 0;
+  return total;
 }
 
 export async function updateDailyStreak(userId: string): Promise<void> {

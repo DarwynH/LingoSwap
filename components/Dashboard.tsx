@@ -22,16 +22,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
   const [totalSessionSeconds, setTotalSessionSeconds] = useState(0);
   const [statsLoading, setStatsLoading] = useState(true);
 
-  // 2. Fetch Active Chat Sessions for the Day
-  useEffect(() => {
-    const fetchSessions = async () => {
-      if (user?.id) {
-        const count = await getDailyActiveSessions(user.id);
-        setActiveSessions(count);
-      }
-    };
-    fetchSessions();
-  }, [user?.id]);
+  // 2. We removed the fetchSessions logic because we now read chatSessionCount directly from the user document snapshot.
 
   // 4. Listen to real-time XP and quest changes
   useEffect(() => {
@@ -44,9 +35,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
         if (data.questData) {
           setQuestData(data.questData as QuestData);
         }
+        setActiveSessions(Number(data.chatSessionCount ?? data.sessionCount ?? data.sessions ?? 0) || 0);
       } else {
         setCurrentStreak(0);
         setTotalSessionSeconds(0);
+        setActiveSessions(0);
       }
       setStatsLoading(false);
     });
