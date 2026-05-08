@@ -1,5 +1,6 @@
 import { UserProfile } from '../types';
 import { isRecentlyOnline } from './presenceUtils';
+import { getLocationScore } from './locationUtils';
 
 /**
  * Normalizes a language string for comparison.
@@ -63,6 +64,9 @@ export function getPartnerMatchScore(currentUser: UserProfile, partner: UserProf
   if (isRecentlyOnline(partner.isOnline, partner.lastSeen)) {
     score += 10;
   }
+
+  // Secondary location bonus — max +20, never overrides language score
+  score += getLocationScore(currentUser, partner);
 
   return score;
 }
