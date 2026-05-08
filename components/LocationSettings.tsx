@@ -19,15 +19,21 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
   const [sharing, setSharing] = useState<boolean>(user.locationSharingEnabled ?? false);
   const [city, setCity] = useState(user.basedCity ?? '');
   const [country, setCountry] = useState(user.basedCountry ?? '');
-  const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'denied' | 'ok'>('idle');
+  const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'denied' | 'ok' | 'insecure' | 'unsupported' | 'unavailable' | 'timeout'>('idle');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   // ── Geolocation handler ─────────────────────────────────────────────────────
   const handleUseMyLocation = () => {
+    if (window.isSecureContext === false) {
+      setGeoStatus('insecure');
+      console.warn('Geolocation requires a secure context (HTTPS or localhost).');
+      return;
+    }
     if (!navigator.geolocation) {
-      setGeoStatus('denied');
+      setGeoStatus('unsupported');
+      console.warn('Geolocation is not supported by this browser.');
       return;
     }
     setGeoStatus('loading');
@@ -40,14 +46,55 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
         setGeoStatus('ok');
         setSharing(true);
       },
-      () => {
-        setGeoStatus('denied');
+      (error) => {
+        console.warn('Geolocation error:', error);
+        if (error.code === error.PERMISSION_DENIED) {
+          setGeoStatus('denied');
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          setGeoStatus('unavailable');
+        } else if (error.code === error.TIMEOUT) {
+          setGeoStatus('timeout');
+        } else {
+          setGeoStatus('denied');
+        }
       },
-      { enableHighAccuracy: false, timeout: 8000 }
+      { enableHighAccuracy: false, timeout: 10000 }
     );
   };
 
-  // ── Firestore save ──────────────────────────────────────────────────────────
+  // ── Toggle: immediately write locationSharingEnabled to Firestore ────────────
+  const handleToggleSharing = async () => {
+    const newValue = !sharing;
+    setSharing(newValue);
+
+    try {
+      const togglePatch: Record<string, unknown> = {
+        locationSharingEnabled: newValue,
+        locationUpdatedAt: serverTimestamp(),
+      };
+
+      if (!newValue) {
+        // Turning off: immediately clear coordinates so the marker disappears
+        togglePatch.approximateLat = null;
+        togglePatch.approximateLng = null;
+      }
+
+      await updateDoc(doc(db, 'users', user.id), togglePatch);
+
+      // Propagate to parent so localUser / map re-renders immediately
+      onUserUpdated({
+        locationSharingEnabled: newValue,
+        approximateLat: newValue ? user.approximateLat : null,
+        approximateLng: newValue ? user.approximateLng : null,
+      });
+    } catch (e) {
+      console.error('Location toggle error:', e);
+      // Revert local state if Firestore write failed
+      setSharing((prev) => !prev);
+    }
+  };
+
+  // ── Firestore save (city / country + full settings) ──────────────────────────
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -99,7 +146,7 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
         <div className="flex items-center gap-2">
           <span className="text-base">📍</span>
           <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Location Settings
+            Find nearby partners
           </span>
           {user.locationSharingEnabled && (
             <span
@@ -125,8 +172,7 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
         <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: 'var(--border-color)' }}>
           {/* Privacy notice */}
           <p className="text-xs mt-3" style={{ color: 'var(--text-secondary)' }}>
-            🔒 We only use <strong>approximate location</strong> (city-level). Your exact location is never
-            stored or shown. Only users who opt in appear on the map.
+            Share approximate location to see nearby language partners. Your exact location is never shown. Only users who opt in appear on the map.
           </p>
 
           {/* Geolocation button */}
@@ -166,8 +212,28 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
             </p>
           )}
           {geoStatus === 'denied' && (
-            <p className="text-xs" style={{ color: '#f59e0b' }}>
-              Location permission denied. You can still set your city/country manually below.
+            <p className="text-xs text-red-500">
+              Location permission was denied. You can enable it in browser settings or enter your city manually.
+            </p>
+          )}
+          {geoStatus === 'insecure' && (
+            <p className="text-xs text-red-500">
+              Location access requires HTTPS or localhost. If you are testing from a phone, deploy the app or use a secure tunnel.
+            </p>
+          )}
+          {geoStatus === 'unsupported' && (
+            <p className="text-xs text-red-500">
+              Your browser does not support location detection. You can still enter your city manually.
+            </p>
+          )}
+          {geoStatus === 'unavailable' && (
+            <p className="text-xs text-red-500">
+              We could not detect your location. Please try again or enter your city manually.
+            </p>
+          )}
+          {geoStatus === 'timeout' && (
+            <p className="text-xs text-red-500">
+              Location detection took too long. Please try again or enter your city manually.
             </p>
           )}
 
@@ -176,7 +242,7 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
             <button
               role="switch"
               aria-checked={sharing}
-              onClick={() => setSharing((s) => !s)}
+              onClick={handleToggleSharing}
               className={`relative w-10 h-5 rounded-full transition-colors ${sharing ? '' : ''}`}
               style={{
                 background: sharing ? 'var(--accent-primary)' : 'var(--border-color)',
