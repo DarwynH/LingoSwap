@@ -102,7 +102,6 @@ export interface ChatMessage {
   fileSize?: number;
   mimeType?: string;
   audioDuration?: number;
-  transcript?: string;
   replyTo?: {
     messageId: string;
     text: string;

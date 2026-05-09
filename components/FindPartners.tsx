@@ -3,23 +3,15 @@
  * Adds an opt-in map view (Leaflet + OpenStreetMap) alongside the existing partner list.
  * Language matching remains the primary sorting criterion.
  * Location is a secondary bonus only.
- *
- * Bug fixes (2026-05):
- *  - Replaced one-time getDocs() with a real-time onSnapshot() listener so that markers
- *    disappear immediately when a user disables location sharing or goes offline.
- *  - Added "Online only" toggle for the map/nearby list.
- *  - visibleMapUsers and nearbyMapPartners are derived from live state on every render
- *    (no separate marker state that could go stale).
  */
 
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { UserProfile } from '../types';
 import PartnerCard from './Dashboard/PartnerCard';
 import { sortPartnersByMatch, isReciprocalMatch, getMatchDescription } from '../utils/matching';
 import { hasSharedApproxLocation, calculateDistanceKm, formatDistance } from '../utils/locationUtils';
-import { isRecentlyOnline } from '../utils/presenceUtils';
 import LocationSettings from './LocationSettings';
 
 // Lazy-load the map to avoid loading Leaflet CSS globally on app start
@@ -37,8 +29,6 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<ViewTab>('list');
-  // "Online only" toggle for the map/nearby list
-  const [onlineOnly, setOnlineOnly] = useState(false);
 
   // Local copy of current user — updated optimistically when location is saved
   const [localUser, setLocalUser] = useState<UserProfile>(user);
@@ -52,25 +42,22 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
     setLocalUser((prev) => ({ ...prev, ...patch }));
   };
 
-  // ── Real-time partner subscription ──────────────────────────────────────────
-  // Using onSnapshot instead of getDocs so that location-sharing changes and
-  // online/offline transitions are reflected immediately without a page reload.
+  // ── Fetch partners ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const unsub = onSnapshot(
-      collection(db, 'users'),
-      (snapshot) => {
-        const list = snapshot.docs
+    const getPartners = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'users'));
+        const list = querySnapshot.docs
           .map((doc) => doc.data() as UserProfile)
           .filter((p) => p.id !== user.id);
         setRealPartners(list);
-        setLoading(false);
-      },
-      (error) => {
-        console.error('Error subscribing to users:', error);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+      } finally {
         setLoading(false);
       }
-    );
-    return () => unsub();
+    };
+    getPartners();
   }, [user.id]);
 
   // ── Filtering & sorting ─────────────────────────────────────────────────────
@@ -84,43 +71,19 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
   const suggestedPartners = sortedPartners.filter((p) => isReciprocalMatch(localUser, p));
   const otherPartners = sortedPartners.filter((p) => !isReciprocalMatch(localUser, p));
 
-  // ── Map visibility filter ───────────────────────────────────────────────────
-  // Derived fresh from realPartners on every render — no separate marker state.
-  // Excludes current user; requires locationSharingEnabled + valid coords.
-  // When onlineOnly is true, also requires isRecentlyOnline.
-  const visibleMapUsers = realPartners.filter((p) => {
-    if (p.id === localUser.id) return false;
-    if (!p.locationSharingEnabled) return false;
-    if (typeof p.approximateLat !== 'number') return false;
-    if (typeof p.approximateLng !== 'number') return false;
-    if (onlineOnly && !isRecentlyOnline(p.isOnline, p.lastSeen)) return false;
-    return true;
+  // Partners shown in the Nearby list (sorted by distance if both have coords)
+  const nearbyPartners = [...sortedPartners].sort((a, b) => {
+    const aHas = hasSharedApproxLocation(a) && hasSharedApproxLocation(localUser);
+    const bHas = hasSharedApproxLocation(b) && hasSharedApproxLocation(localUser);
+    if (aHas && bHas) {
+      const dA = calculateDistanceKm(localUser.approximateLat!, localUser.approximateLng!, a.approximateLat!, a.approximateLng!);
+      const dB = calculateDistanceKm(localUser.approximateLat!, localUser.approximateLng!, b.approximateLat!, b.approximateLng!);
+      return dA - dB;
+    }
+    if (aHas) return -1;
+    if (bHas) return 1;
+    return 0;
   });
-
-  // ── Nearby community list (map tab) ─────────────────────────────────────────
-  // Same visibility logic as the map. Sort by distance when current user has coords.
-  const nearbyMapPartners = realPartners
-    .filter((p) => {
-      if (p.id === localUser.id) return false;
-      if (!hasSharedApproxLocation(p)) return false;
-      if (onlineOnly && !isRecentlyOnline(p.isOnline, p.lastSeen)) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      // Sort match-first, then distance
-      if (hasSharedApproxLocation(localUser)) {
-        const dA = calculateDistanceKm(
-          localUser.approximateLat!, localUser.approximateLng!,
-          a.approximateLat!, a.approximateLng!
-        );
-        const dB = calculateDistanceKm(
-          localUser.approximateLat!, localUser.approximateLng!,
-          b.approximateLat!, b.approximateLng!
-        );
-        return dA - dB;
-      }
-      return 0;
-    });
 
   // ── Loading state ───────────────────────────────────────────────────────────
   if (loading) {
@@ -192,27 +155,6 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
             )}
           </div>
         )}
-
-        {/* Online-only toggle (map tab only) */}
-        {activeTab === 'map' && (
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <button
-              role="switch"
-              aria-checked={onlineOnly}
-              onClick={() => setOnlineOnly((v) => !v)}
-              className="relative w-9 h-5 rounded-full transition-colors flex-shrink-0"
-              style={{ background: onlineOnly ? 'var(--accent-primary)' : 'var(--border-color)' }}
-            >
-              <span
-                className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform"
-                style={{ transform: onlineOnly ? 'translateX(16px)' : 'translateX(0)' }}
-              />
-            </button>
-            <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
-              Online only (active within 5 min)
-            </span>
-          </label>
-        )}
       </header>
 
       {/* ── Body ── */}
@@ -237,7 +179,7 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
             >
               <PartnerMap
                 currentUser={localUser}
-                partners={visibleMapUsers}
+                partners={filteredPartners}
                 onStartChat={onStartChat}
               />
             </Suspense>
@@ -245,28 +187,26 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
             {/* Nearby partner list */}
             <div>
               <h3 className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: 'var(--text-secondary)' }}>
-                📍 Community Members Nearby
+                📍 Nearby Partners
               </h3>
-              {nearbyMapPartners.length === 0 ? (
+              {nearbyPartners.length === 0 ? (
                 <p className="text-sm text-center py-6" style={{ color: 'var(--text-secondary)' }}>
-                  {onlineOnly
-                    ? 'No online community members have enabled location sharing.'
-                    : 'No community members have enabled location sharing yet.'}
+                  No partners found.
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {nearbyMapPartners.map((partner) => {
+                  {nearbyPartners.map((partner) => {
                     const matchBadge = getMatchDescription(localUser, partner);
                     const isBest = matchBadge === 'Best Match';
-                    const distKm =
-                      hasSharedApproxLocation(localUser) && hasSharedApproxLocation(partner)
-                        ? calculateDistanceKm(
-                            localUser.approximateLat!,
-                            localUser.approximateLng!,
-                            partner.approximateLat!,
-                            partner.approximateLng!
-                          )
-                        : null;
+                    const hasCoords = hasSharedApproxLocation(partner) && hasSharedApproxLocation(localUser);
+                    const distKm = hasCoords
+                      ? calculateDistanceKm(
+                          localUser.approximateLat!,
+                          localUser.approximateLng!,
+                          partner.approximateLat!,
+                          partner.approximateLng!
+                        )
+                      : null;
 
                     const nativeLangs = Array.isArray(partner.nativeLanguage)
                       ? partner.nativeLanguage.join(', ')
@@ -275,15 +215,9 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
                       ? partner.targetLanguage.join(', ')
                       : partner.targetLanguage ?? '—';
 
-                    // Stable key includes visibility-relevant fields
-                    const lastSeenVal =
-                      partner.lastSeen?.seconds ??
-                      (typeof partner.lastSeen === 'number' ? partner.lastSeen : 0);
-                    const stableKey = `${partner.id}-${partner.locationSharingEnabled}-${partner.approximateLat}-${partner.approximateLng}-${partner.isOnline}-${lastSeenVal}`;
-
                     return (
                       <div
-                        key={stableKey}
+                        key={partner.id}
                         className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 border transition-all"
                         style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-color)' }}
                       >
@@ -320,10 +254,8 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
                                   {partner.basedCountry ? `, ${partner.basedCountry}` : ''}
                                 </span>
                               )}
-                              {distKm !== null ? (
-                                <span>📍 Approx. {formatDistance(distKm)} away</span>
-                              ) : (
-                                <span>📍 Distance unavailable</span>
+                              {distKm !== null && (
+                                <span>📍 ~{formatDistance(distKm)}</span>
                               )}
                             </div>
                           </div>

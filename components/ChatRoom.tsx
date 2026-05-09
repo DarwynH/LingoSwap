@@ -31,7 +31,6 @@ import IdiomExplanationModal from './Chat/IdiomExplanationModal';
 import { createPortal } from 'react-dom';
 import { recordActions } from '../services/gamificationService';
 import { resolveDeepLTarget } from '../services/translationService';
-import { requestVoiceTranscript } from '../services/transcriptionService';
 import { isRecentlyOnline, formatLastSeen } from '../utils/presenceUtils';
 import { recordUserActivityAfterMessage } from '../services/progressService';
 
@@ -476,7 +475,6 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       messagePayload.fileSize = fileData.fileSize;
       messagePayload.mimeType = fileData.mimeType;
       if (fileData.audioDuration) messagePayload.audioDuration = fileData.audioDuration;
-      if (fileData.transcript) messagePayload.transcript = fileData.transcript;
     }
 
     if (replyTarget) {
@@ -608,21 +606,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       },
       async () => {
         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        let voiceTranscript = '';
-
-        try {
-          voiceTranscript = await requestVoiceTranscript(downloadURL);
-        } catch (err) {
-          console.warn('Voice transcription failed:', err);
-        }
-
         await sendMessageToFirestore('', 'voice', {
           fileURL: downloadURL,
           fileName: uniqueFileName,
           fileSize: audioBlob.size,
           mimeType: 'audio/webm',
           audioDuration: duration,
-          transcript: voiceTranscript,
         });
         setIsUploading(false);
         setUploadProgress(0);
