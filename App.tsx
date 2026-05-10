@@ -42,6 +42,16 @@ const App: React.FC = () => {
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [activeCallType, setActiveCallType] = useState<'voice' | 'video'>('voice');
 
+  const resetUserSessionState = () => {
+    setActiveSession(null);
+    setSelectedPartner(null);
+    setActiveChatId(null);
+    setJumpToMessageId(null);
+    setIncomingCall(null);
+    setActiveCallId(null);
+    setActiveTab('dashboard');
+  };
+
   useEffect(() => {
     if (incomingCall && view !== 'call') {
       if (!ringtoneRef.current) {
@@ -114,6 +124,7 @@ const App: React.FC = () => {
       } else {
         setUser(null);
         setView('landing');
+        resetUserSessionState();
         if (heartbeatInterval) clearInterval(heartbeatInterval);
       }
     });
@@ -538,6 +549,7 @@ const App: React.FC = () => {
     // 4. Clear local session data
     sessionStorage.removeItem('lingoswap_user');
     setUser(null);
+    resetUserSessionState();
   };
 
   const handleAcceptCall = async () => {

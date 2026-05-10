@@ -126,6 +126,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
   // Mute / Block state
   const [isMuted, setIsMuted] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [clearedAt, setClearedAt] = useState<number | null>(null);
 
   // Translation target state — separate for message vs draft
   // Message translation: help user understand received messages → default to native language
@@ -190,14 +191,17 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
     setIsHeaderMenuOpen(false);
   }, [session.id]);
 
-  // Listen to mute state from the conversation document
+  // Listen to mute/cleared state from the conversation document
   useEffect(() => {
     const convRef = doc(db, 'users', user.id, 'conversations', session.partner.id);
     const unsub = onSnapshot(convRef, (snap) => {
       if (snap.exists()) {
-        setIsMuted(snap.data().muted === true);
+        const data = snap.data();
+        setIsMuted(data.muted === true);
+        setClearedAt(data.clearedAt || null);
       } else {
         setIsMuted(false);
+        setClearedAt(null);
       }
     });
     return () => unsub();
@@ -831,7 +835,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       {/* In-chat search bar */}
       {isSearchOpen && (
         <ChatSearchBar
-          messages={messages}
+          messages={clearedAt ? messages.filter(m => m.timestamp > clearedAt) : messages}
           messageRefs={messageRefs}
           onClose={() => setIsSearchOpen(false)}
         />
@@ -840,9 +844,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ user, session, onBack, onCall, jump
       {/* Messages Area */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto relative bg-surface-main z-0 flex">
         <div className="w-full px-4 lg:px-8 py-6">
-          {messages.map((msg, index) => {
-            const prevMsg = messages[index - 1];
-            const nextMsg = messages[index + 1];
+          {(clearedAt ? messages.filter(m => m.timestamp > clearedAt) : messages).map((msg, index, visibleMessages) => {
+            const prevMsg = visibleMessages[index - 1];
+            const nextMsg = visibleMessages[index + 1];
 
             const showDate = !prevMsg || !isSameDay(prevMsg.timestamp, msg.timestamp);
 

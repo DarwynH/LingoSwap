@@ -144,6 +144,12 @@ export interface ConversationPreview {
   timestamp: number;
   unreadCount: number; 
   note?: string;
+  muted?: boolean;
+  mutedAt?: number;
+  pinned?: boolean;
+  pinnedAt?: number;
+  clearedAt?: number;
+  deletedAt?: number;
 }
 
 // Types for saved items (Phrasebook & Study Later)

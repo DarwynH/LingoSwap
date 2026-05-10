@@ -1,9 +1,10 @@
 
 import React, { useState } from 'react';
 import { UserProfile, Language } from '../types';
-import { auth, db } from '../firebase';
+import { auth, db, storage } from '../firebase';
 import { updatePassword, deleteUser } from 'firebase/auth';
 import { doc, deleteDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getLevelInfo } from '../services/gamificationService';
 import LevelBadge from './ui/LevelBadge';
 
@@ -17,6 +18,8 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
   const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
   const [bio, setBio] = useState(profile.bio || "");
   const [newPassword, setNewPassword] = useState("");
+  const [avatarPreview, setAvatarPreview] = useState(profile.avatar);
+  const [isUploading, setIsUploading] = useState(false);
 
   const [native, setNative] = useState<Language[]>(
     Array.isArray(profile.nativeLanguage) ? profile.nativeLanguage : [Language.SELECT]
@@ -26,6 +29,29 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
   );
 
   const isPasswordUser = auth.currentUser?.providerData.some(p => p.providerId === 'password');
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File size exceeds 5MB limit.");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const storageRef = ref(storage, `profilePhotos/${auth.currentUser?.uid || profile.id}/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      setAvatarPreview(downloadURL);
+    } catch (error) {
+      console.error("Error uploading photo:", error);
+      alert("Failed to upload photo. Please try again.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleChangePassword = async () => {
     if (!auth.currentUser || !newPassword) return;
@@ -92,6 +118,7 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
     onSave({
       ...profile,
       name,
+      avatar: avatarPreview,
       nativeLanguage: native,
       targetLanguage: target,
       bio: bio || ""
@@ -115,7 +142,13 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
       <h2 className="text-3xl font-bold mb-6 text-theme-text">Complete Your Profile</h2>
       <div className="space-y-6">
         <div className="flex flex-col items-center mb-4 gap-2">
-            <img src={profile.avatar} alt="Avatar" className="w-24 h-24 rounded-full border-4 border-[#00a884]" />
+            <div className="relative group">
+              <img src={avatarPreview} alt="Avatar" className="w-24 h-24 rounded-full border-4 border-[#00a884] object-cover" />
+              <label className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
+                 <span className="text-white text-xs font-semibold">{isUploading ? 'Uploading...' : 'Change'}</span>
+                 <input type="file" className="hidden" accept="image/jpeg, image/png, image/webp" onChange={handlePhotoUpload} disabled={isUploading} />
+              </label>
+            </div>
             <LevelBadge level={getLevelInfo(profile.xp || 0)} size="md" showXP xp={profile.xp || 0} />
         </div>
         
