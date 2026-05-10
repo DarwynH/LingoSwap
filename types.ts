@@ -35,6 +35,14 @@ export interface UserProfile {
   activityByDate?: Record<string, number>;
   longestStreak?: number;
   lastActiveDate?: string;
+
+  // Location sharing (opt-in only, approximate city-level data)
+  locationSharingEnabled?: boolean;
+  approximateLat?: number | null;
+  approximateLng?: number | null;
+  basedCity?: string;
+  basedCountry?: string;
+  locationUpdatedAt?: any; // Firestore Timestamp
 }
 
 // Gamification Types
