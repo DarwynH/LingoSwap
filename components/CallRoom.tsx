@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { UserProfile, CallStatus, Language } from '../types';
 import { db } from '../firebase';
 import { doc, updateDoc, getDoc, collection, addDoc, onSnapshot } from 'firebase/firestore';
@@ -75,6 +75,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
   // Captions refs
   const recognitionRef = useRef<any>(null);
   const recognitionActiveRef = useRef(false);
+  const shouldSendTranscriptsRef = useRef(false);
 
   useEffect(() => {
     const getDevices = async () => {
@@ -132,15 +133,15 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
       if (finalTranscript.trim()) {
         const cleanText = finalTranscript.trim();
         setTranscriptLines(prev => [...prev, cleanText].slice(-3));
-        // Send to partner if remote captions are enabled
-        if (isRemoteCaptionsEnabled) {
-          sendTranscriptToPartner(cleanText);
-        }
+        // Send to partner via ref
+        sendTranscriptToPartner(cleanText);
       }
     };
 
     recognition.onerror = (event) => {
-      setRecognitionError(`Speech recognition error: ${event.error}`);
+      if (event.error !== 'aborted') {
+        setRecognitionError(`Speech recognition error: ${event.error}`);
+      }
     };
 
     recognition.onend = () => {
@@ -176,12 +177,11 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
   };
 
   // Send transcript to partner via Firestore
-  const sendTranscriptToPartner = async (text: string) => {
-    if (!callId || !text.trim()) return;
+  const sendTranscriptToPartner = useCallback(async (text: string) => {
+    if (!callId || !text.trim() || !shouldSendTranscriptsRef.current) return;
 
     try {
-      const transcriptRef = doc(collection(db, 'calls', callId, 'transcripts'));
-      await addDoc(transcriptRef, {
+      await addDoc(collection(db, 'calls', callId, 'transcripts'), {
         speakerId: currentUser.id,
         speakerName: currentUser.name,
         text: text.trim(),
@@ -192,7 +192,7 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
     } catch (error) {
       console.error('Failed to send transcript:', error);
     }
-  };
+  }, [callId, currentUser.id, currentUser.name, captionLanguage]);
 
   // Listen for partner's transcripts
   useEffect(() => {
@@ -211,6 +211,11 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
     return unsubscribe;
   }, [callId, currentUser.id]);
 
+  // Update the ref for sending transcripts
+  useEffect(() => {
+    shouldSendTranscriptsRef.current = isRemoteCaptionsEnabled;
+  }, [isRemoteCaptionsEnabled]);
+
   // Handle captions toggle and call status changes
   useEffect(() => {
     if (isCaptionsEnabled && status === 'active') {
@@ -220,7 +225,18 @@ const CallRoom: React.FC<CallRoomProps> = ({ currentUser, partner, callId, callT
     } else {
       stopCaptions();
     }
-  }, [isCaptionsEnabled, status, captionLanguage]);
+  }, [isCaptionsEnabled, status]);
+
+  // Handle language changes separately - reinit recognition with new language
+  useEffect(() => {
+    if (isCaptionsEnabled && status === 'active' && recognitionActiveRef.current) {
+      stopCaptions();
+      setTimeout(() => {
+        initSpeechRecognition();
+        startCaptions();
+      }, 100);
+    }
+  }, [captionLanguage]);
 
   useEffect(() => {
     if (!callId || hasSetupStarted.current) return;

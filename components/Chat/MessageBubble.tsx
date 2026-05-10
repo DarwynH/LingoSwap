@@ -178,8 +178,15 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
       )}
 
       {message.type === 'voice' && message.fileURL && (
-        <div className="flex items-center space-x-2 py-1 min-w-[200px]">
-          <audio controls src={message.fileURL} className="h-10 w-full opacity-90" controlsList="nodownload" />
+        <div className="mb-2">
+          <div className="flex items-center space-x-2 py-1 min-w-[200px]">
+            <audio controls src={message.fileURL} className="h-10 w-full opacity-90" controlsList="nodownload" />
+          </div>
+          {message.transcript && (
+            <div className="mt-2 rounded-2xl bg-surface-main/80 p-3 text-[13px] text-theme-muted italic">
+              {message.transcript}
+            </div>
+          )}
         </div>
       )}
 
