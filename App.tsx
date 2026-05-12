@@ -17,6 +17,7 @@ import ProgressView from './components/ProgressView';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { playMessageNotification } from './utils/notificationSound';
 import { flushSessionTime, markSessionStarted } from './services/progressService';
+import { isRecentlyOnline } from './utils/presenceUtils';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -441,11 +442,14 @@ const App: React.FC = () => {
         const partnerDoc = await getDoc(doc(db, 'users', partner.id));
         const partnerData = partnerDoc.data() as UserProfile | undefined;
         
-        const isRecent = partnerData?.lastSeen ? Date.now() - partnerData.lastSeen < 120000 : false;
-        const isOnline = partnerData?.isOnline && isRecent;
+        // Use the shared isRecentlyOnline() helper — same logic as the chat header.
+        // Previously this used `Date.now() - partnerData.lastSeen` which is wrong because
+        // lastSeen is a Firestore Timestamp object, not a number, causing NaN comparisons
+        // that always returned false (= always looked offline).
+        const isOnline = isRecentlyOnline(partnerData?.isOnline, partnerData?.lastSeen);
         
         if (!isOnline) {
-          alert(`${partner.name} is offline.`);
+          alert(`${partner.name} is currently offline or unavailable.`);
           await logCallMessageInChat(partner, 'offline', type, user.id);
           return;
         }
@@ -717,7 +721,7 @@ const App: React.FC = () => {
                   
                   <div className="relative z-10 max-w-md">
                     <div className="w-24 h-24 mb-6 mx-auto rounded-full bg-surface-card flex items-center justify-center shadow-inner border border-theme-border/50">
-                      <img src="/ndhu_logo.png" alt="LingoSwap" className="w-14 h-14 object-contain" />
+                      <img src="/lingo-logo.png" alt="LingoSwap" className="w-14 h-14 object-contain" />
                     </div>
                     <h2 className="text-2xl font-light text-theme-text mb-3 tracking-wide">LingoSwap <span className="font-semibold text-theme-text">Web</span></h2>
                     <p className="text-theme-muted leading-relaxed text-sm">
