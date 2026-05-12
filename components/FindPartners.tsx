@@ -18,7 +18,7 @@ import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { UserProfile } from '../types';
 import PartnerCard from './Dashboard/PartnerCard';
 import { sortPartnersByMatch, isReciprocalMatch, getMatchDescription } from '../utils/matching';
-import { hasSharedApproxLocation, calculateDistanceKm, formatDistance } from '../utils/locationUtils';
+import { hasValidLocation, getUserLat, getUserLng, distanceBetweenUsers, formatDistance } from '../utils/locationUtils';
 import { isRecentlyOnline } from '../utils/presenceUtils';
 import LocationSettings from './LocationSettings';
 
@@ -86,13 +86,12 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
 
   // ── Map visibility filter ───────────────────────────────────────────────────
   // Derived fresh from realPartners on every render — no separate marker state.
-  // Excludes current user; requires locationSharingEnabled + valid coords.
+  // Excludes current user; requires locationSharingEnabled + valid coords (accurate or legacy).
   // When onlineOnly is true, also requires isRecentlyOnline.
   const visibleMapUsers = realPartners.filter((p) => {
     if (p.id === localUser.id) return false;
     if (!p.locationSharingEnabled) return false;
-    if (typeof p.approximateLat !== 'number') return false;
-    if (typeof p.approximateLng !== 'number') return false;
+    if (!hasValidLocation(p)) return false;
     if (onlineOnly && !isRecentlyOnline(p.isOnline, p.lastSeen)) return false;
     return true;
   });
@@ -102,21 +101,15 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
   const nearbyMapPartners = realPartners
     .filter((p) => {
       if (p.id === localUser.id) return false;
-      if (!hasSharedApproxLocation(p)) return false;
+      if (!hasValidLocation(p)) return false;
       if (onlineOnly && !isRecentlyOnline(p.isOnline, p.lastSeen)) return false;
       return true;
     })
     .sort((a, b) => {
-      // Sort match-first, then distance
-      if (hasSharedApproxLocation(localUser)) {
-        const dA = calculateDistanceKm(
-          localUser.approximateLat!, localUser.approximateLng!,
-          a.approximateLat!, a.approximateLng!
-        );
-        const dB = calculateDistanceKm(
-          localUser.approximateLat!, localUser.approximateLng!,
-          b.approximateLat!, b.approximateLng!
-        );
+      const selfHasLoc = getUserLat(localUser) !== null && getUserLng(localUser) !== null;
+      if (selfHasLoc) {
+        const dA = distanceBetweenUsers(localUser, a) ?? Infinity;
+        const dB = distanceBetweenUsers(localUser, b) ?? Infinity;
         return dA - dB;
       }
       return 0;
@@ -259,13 +252,9 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
                     const matchBadge = getMatchDescription(localUser, partner);
                     const isBest = matchBadge === 'Best Match';
                     const distKm =
-                      hasSharedApproxLocation(localUser) && hasSharedApproxLocation(partner)
-                        ? calculateDistanceKm(
-                            localUser.approximateLat!,
-                            localUser.approximateLng!,
-                            partner.approximateLat!,
-                            partner.approximateLng!
-                          )
+                      getUserLat(localUser) !== null && getUserLng(localUser) !== null &&
+                      getUserLat(partner) !== null && getUserLng(partner) !== null
+                        ? distanceBetweenUsers(localUser, partner)
                         : null;
 
                     const nativeLangs = Array.isArray(partner.nativeLanguage)
@@ -279,7 +268,7 @@ const FindPartners: React.FC<FindPartnersProps> = ({ user, onStartChat }) => {
                     const lastSeenVal =
                       partner.lastSeen?.seconds ??
                       (typeof partner.lastSeen === 'number' ? partner.lastSeen : 0);
-                    const stableKey = `${partner.id}-${partner.locationSharingEnabled}-${partner.approximateLat}-${partner.approximateLng}-${partner.isOnline}-${lastSeenVal}`;
+                    const stableKey = `${partner.id}-${partner.locationSharingEnabled}-${partner.locationLat ?? partner.approximateLat}-${partner.locationLng ?? partner.approximateLng}-${partner.isOnline}-${lastSeenVal}`;
 
                     return (
                       <div

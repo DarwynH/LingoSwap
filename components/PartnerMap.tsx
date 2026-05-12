@@ -2,27 +2,42 @@
  * PartnerMap.tsx
  * Leaflet + OpenStreetMap map for the Find Partners section.
  * Global opt-in community map — shows ALL users who have enabled location sharing.
- * A partner marker is shown ONLY when:
- *   1. locationSharingEnabled === true
- *   2. approximateLat and approximateLng exist (valid approximate coordinates)
- * Online status is handled by the parent (FindPartners) via the onlineOnly toggle.
- * Language matching is only used for marker colour (Best Match = gold).
  *
- * Bug fixes (2026-05):
- *  - Overlapping markers: users sharing the same rounded coordinate are grouped into a
- *    single marker. The popup lists ALL users in that approximate area.
- *  - Stale markers: markers are derived entirely from the `partners` prop each render;
- *    no separate marker state that could lag behind.
- *  - Stable React keys: composite key includes all visibility-relevant fields so React
- *    removes markers that no longer pass the visibility filter.
+ * A marker is shown ONLY when:
+ *   1. locationSharingEnabled === true
+ *   2. User has valid coordinates (locationLat/locationLng preferred; falls back to
+ *      legacy approximateLat/approximateLng)
+ *
+ * 2026-05 accuracy update:
+ *  - Switched from rounded approximate coords to accurate GPS (locationLat/locationLng).
+ *    Fallback to legacy approximate fields for existing users who haven't re-set location.
+ *  - Marker overlap fix: users at nearly identical coords (within ~50m bucket) are
+ *    grouped into one marker. Popup lists all users. Individual offsets applied so
+ *    overlapping exact-match coords spread into a small ring rather than stacking.
+ *  - Self marker shown only when sharing is enabled and coords exist.
+ *  - Real-time: markers derived entirely from `partners` prop on every render —
+ *    no stale local marker state.
+ *
+ * 2026-05 viewport-stability fix:
+ *  - Replaced the old FitBounds component (which called fitBounds/setView on every
+ *    render whenever positions changed) with MapViewController.
+ *  - MapViewController only auto-centers ONCE on the very first load, and only if the
+ *    user hasn't interacted with the map yet.
+ *  - Subsequent Firestore/partner updates do NOT reset zoom or center.
+ *  - "Center on me" and "Show all" buttons let the user explicitly re-center.
  */
 
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import { UserProfile } from '../types';
-import { hasSharedApproxLocation, calculateDistanceKm, formatDistance } from '../utils/locationUtils';
+import {
+  getUserLat,
+  getUserLng,
+  distanceBetweenUsers,
+  formatDistance,
+} from '../utils/locationUtils';
 import { getMatchDescription } from '../utils/matching';
 
 // ── Fix default marker icons broken by Vite's asset pipeline ─────────────────
@@ -75,66 +90,52 @@ function createColoredMarker(color: string, count = 1): L.DivIcon {
   });
 }
 
-const selfMarker = createColoredMarker('#2563eb');
+const selfMarkerIcon = createColoredMarker('#2563eb');
 
-// ── Auto-fit map bounds ───────────────────────────────────────────────────────
-interface FitBoundsProps {
-  positions: [number, number][];
+// ── Coordinate bucket size ────────────────────────────────────────────────────
+// ~50m at the equator; users closer than this are grouped into one marker.
+const BUCKET_PRECISION = 3; // decimal places (~111m resolution)
+
+function toBucket(v: number): number {
+  const factor = Math.pow(10, BUCKET_PRECISION);
+  return Math.round(v * factor) / factor;
 }
-const FitBounds: React.FC<FitBoundsProps> = ({ positions }) => {
-  const map = useMap();
-  useEffect(() => {
-    if (positions.length > 1) {
-      map.fitBounds(positions, { padding: [40, 40], maxZoom: 10 });
-    } else if (positions.length === 1) {
-      map.setView(positions[0], 7);
-    }
-  }, [map, positions]);
-  return null;
-};
 
-const MapResizer: React.FC = () => {
-  const map = useMap();
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      map.invalidateSize();
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [map]);
-  return null;
-};
+function coordBucketKey(lat: number, lng: number): string {
+  return `${toBucket(lat)}_${toBucket(lng)}`;
+}
 
 // ── Location group ────────────────────────────────────────────────────────────
 interface LocationGroup {
-  /** Coordinate key e.g. "35.68_139.69" */
+  /** Coordinate bucket key e.g. "35.689_139.692" */
   key: string;
+  /** Representative lat for the group (centroid of members) */
   lat: number;
+  /** Representative lng for the group (centroid of members) */
   lng: number;
   users: UserProfile[];
   /** true if ANY user in this group is a Best Match */
   hasBestMatch: boolean;
 }
 
-/** Build a stable coordinate key from rounded approximate coordinates. */
-function coordKey(lat: number, lng: number): string {
-  return `${lat}_${lng}`;
-}
-
 /**
- * Group visible partners by their approximate coordinates.
- * Users at the exact same rounded position go into one group.
+ * Group visible partners by coordinate bucket.
+ * Users in the same ~50m cell share one marker; popup lists all of them.
  */
 function groupByCoordinate(partners: UserProfile[], currentUser: UserProfile): LocationGroup[] {
   const map = new Map<string, LocationGroup>();
 
   for (const p of partners) {
-    if (typeof p.approximateLat !== 'number' || typeof p.approximateLng !== 'number') continue;
-    const key = coordKey(p.approximateLat, p.approximateLng);
+    const lat = getUserLat(p);
+    const lng = getUserLng(p);
+    if (lat === null || lng === null) continue;
+
+    const key = coordBucketKey(lat, lng);
     if (!map.has(key)) {
       map.set(key, {
         key,
-        lat: p.approximateLat,
-        lng: p.approximateLng,
+        lat,
+        lng,
         users: [],
         hasBestMatch: false,
       });
@@ -149,28 +150,171 @@ function groupByCoordinate(partners: UserProfile[], currentUser: UserProfile): L
   return Array.from(map.values());
 }
 
+// ── MapViewController ─────────────────────────────────────────────────────────
+/**
+ * Inner component that controls map viewport in a stable way.
+ *
+ * Rules:
+ * 1. Auto-centers ONCE on the first valid currentUser location (hasInitialCentered).
+ * 2. After the user drags or zooms, userInteracted is set and auto-centering stops.
+ * 3. Explicit actions ("Center on me", "Show all") are triggered by the parent via
+ *    the `centerOnMeRequest` and `showAllRequest` counters — incrementing either
+ *    counter fires the corresponding action regardless of userInteracted.
+ * 4. Calling invalidateSize when the map becomes visible (triggered by invalidateTick).
+ */
+interface MapViewControllerProps {
+  currentUserLocation: [number, number] | null;
+  allPositions: [number, number][];
+  centerOnMeRequest: number;   // increment to trigger "center on me"
+  showAllRequest: number;      // increment to trigger "fit all markers"
+  invalidateTick: number;      // increment to trigger invalidateSize
+}
+
+const MapViewController: React.FC<MapViewControllerProps> = ({
+  currentUserLocation,
+  allPositions,
+  centerOnMeRequest,
+  showAllRequest,
+  invalidateTick,
+}) => {
+  const map = useMap();
+  const hasInitialCenteredRef = useRef(false);
+  const userInteractedRef = useRef(false);
+  const prevCenterOnMeRef = useRef(centerOnMeRequest);
+  const prevShowAllRef = useRef(showAllRequest);
+  const prevInvalidateRef = useRef(invalidateTick);
+
+  // Track user interaction so we stop auto-centering after they touch the map
+  useMapEvents({
+    dragstart: () => { userInteractedRef.current = true; },
+    zoomstart: () => { userInteractedRef.current = true; },
+  });
+
+  // ── One-time initial centering ──────────────────────────────────────────────
+  useEffect(() => {
+    if (hasInitialCenteredRef.current) return;
+    if (userInteractedRef.current) return;
+    if (!currentUserLocation) return;
+
+    map.setView(currentUserLocation, 13, { animate: false });
+    hasInitialCenteredRef.current = true;
+  }, [map, currentUserLocation]);
+
+  // ── "Center on me" explicit action ─────────────────────────────────────────
+  useEffect(() => {
+    if (centerOnMeRequest === prevCenterOnMeRef.current) return;
+    prevCenterOnMeRef.current = centerOnMeRequest;
+
+    if (!currentUserLocation) return;
+    map.flyTo(currentUserLocation, 13, { animate: true, duration: 0.8 });
+    // After explicit action, reset userInteracted so next location update can
+    // still be treated as "user chose to center here".
+    userInteractedRef.current = false;
+  }, [map, centerOnMeRequest, currentUserLocation]);
+
+  // ── "Show all" explicit action ──────────────────────────────────────────────
+  useEffect(() => {
+    if (showAllRequest === prevShowAllRef.current) return;
+    prevShowAllRef.current = showAllRequest;
+
+    if (allPositions.length === 0) return;
+    if (allPositions.length === 1) {
+      map.flyTo(allPositions[0], 10, { animate: true, duration: 0.8 });
+    } else {
+      map.flyToBounds(allPositions, { padding: [40, 40], maxZoom: 10, animate: true, duration: 0.8 });
+    }
+    userInteractedRef.current = false;
+  }, [map, showAllRequest, allPositions]);
+
+  // ── invalidateSize when tab becomes visible ─────────────────────────────────
+  useEffect(() => {
+    if (invalidateTick === prevInvalidateRef.current) return;
+    prevInvalidateRef.current = invalidateTick;
+
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [map, invalidateTick]);
+
+  return null;
+};
+
+// ── MapResizer (initial paint fix) ───────────────────────────────────────────
+const MapResizer: React.FC = () => {
+  const map = useMap();
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [map]);
+  return null;
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 interface PartnerMapProps {
   currentUser: UserProfile;
-  /** Pre-filtered list: already excludes current user, already requires locationSharingEnabled + coords. */
+  /** Pre-filtered list: already excludes current user, already requires locationSharingEnabled + valid coords. */
   partners: UserProfile[];
   onStartChat: (partner: UserProfile, chatId: string) => void;
 }
 
 const PartnerMap: React.FC<PartnerMapProps> = ({ currentUser, partners, onStartChat }) => {
-  const selfHasLocation = hasSharedApproxLocation(currentUser);
+  const selfLat = getUserLat(currentUser);
+  const selfLng = getUserLng(currentUser);
+  const selfHasLocation = !!(
+    currentUser.locationSharingEnabled &&
+    selfLat !== null &&
+    selfLng !== null
+  );
 
-  // Group partners by approximate coordinate — solves the overlapping-marker bug.
+  // ── Stable initial center ────────────────────────────────────────────────────
+  // Captured once at mount into a ref so MapContainer's `center` prop never
+  // changes between renders (MapContainer ignores prop changes after mount, but
+  // using a ref makes this explicit and safe).
+  const initialCenterRef = useRef<[number, number] | null>(null);
+  if (initialCenterRef.current === null) {
+    // First render: pick the best starting center we have right now
+    if (selfLat !== null && selfLng !== null) {
+      initialCenterRef.current = [selfLat, selfLng];
+    } else {
+      // Pick any partner location, or fall back to world center
+      const firstPartner = partners.find((p) => getUserLat(p) !== null && getUserLng(p) !== null);
+      if (firstPartner) {
+        initialCenterRef.current = [getUserLat(firstPartner)!, getUserLng(firstPartner)!];
+      } else {
+        initialCenterRef.current = [20, 0];
+      }
+    }
+  }
+
+  // ── Group partners by coordinate bucket ──────────────────────────────────────
   const locationGroups = groupByCoordinate(partners, currentUser);
 
-  // All map positions for auto-fitting bounds
-  const positions: [number, number][] = [];
-  if (selfHasLocation) {
-    positions.push([currentUser.approximateLat!, currentUser.approximateLng!]);
-  }
-  locationGroups.forEach((g) => positions.push([g.lat, g.lng]));
+  // ── Positions for "Show all" ─────────────────────────────────────────────────
+  const allPositions: [number, number][] = [];
+  if (selfHasLocation) allPositions.push([selfLat!, selfLng!]);
+  locationGroups.forEach((g) => allPositions.push([g.lat, g.lng]));
 
-  const defaultCenter: [number, number] = positions[0] ?? [20, 0];
+  // ── Explicit action counters ─────────────────────────────────────────────────
+  const [centerOnMeRequest, setCenterOnMeRequest] = useState(0);
+  const [showAllRequest, setShowAllRequest] = useState(0);
+  // Used to signal MapViewController to call invalidateSize (e.g. if needed)
+  const [invalidateTick] = useState(0);
+
+  const handleCenterOnMe = useCallback(() => {
+    if (!selfHasLocation) return;
+    setCenterOnMeRequest((n) => n + 1);
+  }, [selfHasLocation]);
+
+  const handleShowAll = useCallback(() => {
+    if (allPositions.length === 0) return;
+    setShowAllRequest((n) => n + 1);
+  }, [allPositions.length]);
+
+  const currentUserLocation: [number, number] | null =
+    selfLat !== null && selfLng !== null ? [selfLat, selfLng] : null;
 
   return (
     <div
@@ -178,37 +322,45 @@ const PartnerMap: React.FC<PartnerMapProps> = ({ currentUser, partners, onStartC
       style={{ borderColor: 'var(--border-color)', height: '380px', minHeight: '300px' }}
     >
       <MapContainer
-        center={defaultCenter}
+        center={initialCenterRef.current!}
         zoom={3}
         style={{ width: '100%', height: '100%' }}
         scrollWheelZoom
         attributionControl
       >
+        {/* Initial paint fix — does NOT reset view on re-renders */}
         <MapResizer />
+
+        {/* Viewport controller — stable, interaction-aware */}
+        <MapViewController
+          currentUserLocation={currentUserLocation}
+          allPositions={allPositions}
+          centerOnMeRequest={centerOnMeRequest}
+          showAllRequest={showAllRequest}
+          invalidateTick={invalidateTick}
+        />
+
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
 
-        {positions.length > 0 && <FitBounds positions={positions} />}
-
         {/* Current user pin */}
         {selfHasLocation && (
           <Marker
-            position={[currentUser.approximateLat!, currentUser.approximateLng!]}
-            icon={selfMarker}
+            position={[selfLat!, selfLng!]}
+            icon={selfMarkerIcon}
           >
             <Popup>
-              <div className="text-sm font-semibold">📍 You (approximate)</div>
-              <div className="text-xs text-gray-500">Your exact location is not shown</div>
+              <div className="text-sm font-semibold">📍 You</div>
+              <div className="text-xs text-gray-500">Your location is only shared while sharing is on</div>
             </Popup>
           </Marker>
         )}
 
         {/* Grouped community member pins */}
         {locationGroups.map((group) => {
-          // Composite key: coord key + sorted user ids + their visibility-relevant fields.
-          // This ensures React replaces the marker element when membership changes.
+          // Composite key: bucket key + sorted user ids + visibility fields
           const memberKeys = group.users
             .map(
               (u) =>
@@ -220,7 +372,7 @@ const PartnerMap: React.FC<PartnerMapProps> = ({ currentUser, partners, onStartC
             .join('|');
           const markerKey = `group-${group.key}-${memberKeys}`;
 
-          const markerIcon = createColoredMarker(
+          const icon = createColoredMarker(
             group.hasBestMatch ? '#f59e0b' : '#10b981',
             group.users.length
           );
@@ -229,7 +381,7 @@ const PartnerMap: React.FC<PartnerMapProps> = ({ currentUser, partners, onStartC
             <Marker
               key={markerKey}
               position={[group.lat, group.lng]}
-              icon={markerIcon}
+              icon={icon}
             >
               <Popup>
                 <GroupPopup
@@ -244,6 +396,52 @@ const PartnerMap: React.FC<PartnerMapProps> = ({ currentUser, partners, onStartC
         })}
       </MapContainer>
 
+      {/* ── Map control buttons (z-index above tiles, below popups) ───────────── */}
+      <div
+        className="absolute top-3 right-3 z-[400] flex flex-col gap-1.5"
+      >
+        {selfHasLocation && (
+          <button
+            onClick={handleCenterOnMe}
+            title="Center on my location"
+            style={{
+              background: 'var(--bg-surface, #fff)',
+              border: '1px solid var(--border-color, #e5e7eb)',
+              color: 'var(--text-primary, #111)',
+              borderRadius: '10px',
+              padding: '5px 10px',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 1px 6px rgba(0,0,0,0.15)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            📍 Center on me
+          </button>
+        )}
+        {allPositions.length > 0 && (
+          <button
+            onClick={handleShowAll}
+            title="Fit all visible markers"
+            style={{
+              background: 'var(--bg-surface, #fff)',
+              border: '1px solid var(--border-color, #e5e7eb)',
+              color: 'var(--text-primary, #111)',
+              borderRadius: '10px',
+              padding: '5px 10px',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 1px 6px rgba(0,0,0,0.15)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            🌍 Show all
+          </button>
+        )}
+      </div>
+
       {/* Legend */}
       <div
         className="absolute bottom-3 left-3 z-[400] rounded-xl px-3 py-2 text-xs space-y-1 shadow-md"
@@ -251,7 +449,7 @@ const PartnerMap: React.FC<PartnerMapProps> = ({ currentUser, partners, onStartC
       >
         <div className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: '#2563eb' }} />
-          You (approximate)
+          You
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: '#f59e0b' }} />
@@ -283,7 +481,7 @@ const PartnerMap: React.FC<PartnerMapProps> = ({ currentUser, partners, onStartC
             No location data yet
           </p>
           <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-            Enable location sharing above to appear on the community map and see other members.
+            Use "Use my current location" above and enable sharing to appear on the community map.
             <br />
             Only users who opt in are visible — any language, anywhere in the world.
           </p>
@@ -302,10 +500,6 @@ const PartnerMap: React.FC<PartnerMapProps> = ({ currentUser, partners, onStartC
 };
 
 // ── GroupPopup ────────────────────────────────────────────────────────────────
-/**
- * Renders the popup for a location group.
- * When multiple users share the same approximate coordinates, they all appear here.
- */
 interface GroupPopupProps {
   group: LocationGroup;
   currentUser: UserProfile;
@@ -340,14 +534,7 @@ const GroupPopup: React.FC<GroupPopupProps> = ({ group, currentUser, selfHasLoca
           const matchBadge = getMatchDescription(currentUser, partner);
           const isBest = matchBadge === 'Best Match';
 
-          const distKm = selfHasLocation
-            ? calculateDistanceKm(
-                currentUser.approximateLat!,
-                currentUser.approximateLng!,
-                partner.approximateLat!,
-                partner.approximateLng!
-              )
-            : null;
+          const distKm = selfHasLocation ? distanceBetweenUsers(currentUser, partner) : null;
 
           const nativeLangs = Array.isArray(partner.nativeLanguage)
             ? partner.nativeLanguage.join(', ')

@@ -1,14 +1,21 @@
 /**
  * LocationSettings.tsx
  * Opt-in location control card shown inside the Find Partners / Discover section.
- * Privacy-safe: only stores rounded (city-level) coordinates when user explicitly opts in.
+ *
+ * 2026-05 update:
+ *  - Switched from approximate (rounded) coordinates to accurate browser GPS.
+ *    Accurate coords are stored as locationLat / locationLng in Firestore.
+ *  - Privacy notice updated to reflect accurate location usage.
+ *  - Sharing toggle guards: prevents enabling sharing without valid coordinates.
+ *  - HTTPS / insecure context detection with user-friendly messaging.
+ *  - enableHighAccuracy: true, maximumAge: 60000, timeout: 10000
  */
 
 import React, { useState } from 'react';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { UserProfile } from '../types';
-import { roundCoordinate } from '../utils/locationUtils';
+import { getUserLat, getUserLng } from '../utils/locationUtils';
 
 interface LocationSettingsProps {
   user: UserProfile;
@@ -19,13 +26,24 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
   const [sharing, setSharing] = useState<boolean>(user.locationSharingEnabled ?? false);
   const [city, setCity] = useState(user.basedCity ?? '');
   const [country, setCountry] = useState(user.basedCountry ?? '');
-  const [geoStatus, setGeoStatus] = useState<'idle' | 'loading' | 'denied' | 'ok' | 'insecure' | 'unsupported' | 'unavailable' | 'timeout'>('idle');
+  const [geoStatus, setGeoStatus] = useState<
+    'idle' | 'loading' | 'denied' | 'ok' | 'insecure' | 'unsupported' | 'unavailable' | 'timeout'
+  >('idle');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
+  // Detected GPS coords (not yet persisted until user saves)
+  const [pendingLat, setPendingLat] = useState<number | null>(null);
+  const [pendingLng, setPendingLng] = useState<number | null>(null);
+
+  // Determine if user already has a valid stored location
+  const hasStoredLocation =
+    getUserLat(user) !== null && getUserLng(user) !== null;
+
   // ── Geolocation handler ─────────────────────────────────────────────────────
   const handleUseMyLocation = () => {
+    // Check HTTPS requirement
     if (window.isSecureContext === false) {
       setGeoStatus('insecure');
       console.warn('Geolocation requires a secure context (HTTPS or localhost).');
@@ -39,12 +57,14 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
     setGeoStatus('loading');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const approxLat = roundCoordinate(pos.coords.latitude);
-        const approxLng = roundCoordinate(pos.coords.longitude);
-        // Store rounded coords in local form state only — not yet persisted
-        onUserUpdated({ approximateLat: approxLat, approximateLng: approxLng });
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        // Keep accurate GPS — do NOT round
+        setPendingLat(lat);
+        setPendingLng(lng);
         setGeoStatus('ok');
-        setSharing(true);
+        // Optimistically reflect in parent so map can show immediately
+        onUserUpdated({ locationLat: lat, locationLng: lng });
       },
       (error) => {
         console.warn('Geolocation error:', error);
@@ -58,13 +78,27 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
           setGeoStatus('denied');
         }
       },
-      { enableHighAccuracy: false, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
   };
 
   // ── Toggle: immediately write locationSharingEnabled to Firestore ────────────
   const handleToggleSharing = async () => {
     const newValue = !sharing;
+
+    // Guard: don't enable sharing if there's no valid location
+    if (newValue) {
+      const effectiveLat = pendingLat ?? getUserLat(user);
+      const effectiveLng = pendingLng ?? getUserLng(user);
+      if (effectiveLat === null || effectiveLng === null) {
+        // Prompt user to get location first
+        setGeoStatus('idle');
+        setExpanded(true);
+        alert('Please use "Use my current location" first before enabling location sharing.');
+        return;
+      }
+    }
+
     setSharing(newValue);
 
     try {
@@ -74,19 +108,14 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
       };
 
       if (!newValue) {
-        // Turning off: immediately clear coordinates so the marker disappears
-        togglePatch.approximateLat = null;
-        togglePatch.approximateLng = null;
+        // Turning off: do NOT clear the coordinates — just hide from map.
+        // Coordinates are preserved so the user can re-enable without re-detecting.
+        // (The Firestore filter uses locationSharingEnabled to show/hide markers.)
       }
 
       await updateDoc(doc(db, 'users', user.id), togglePatch);
 
-      // Propagate to parent so localUser / map re-renders immediately
-      onUserUpdated({
-        locationSharingEnabled: newValue,
-        approximateLat: newValue ? user.approximateLat : null,
-        approximateLng: newValue ? user.approximateLng : null,
-      });
+      onUserUpdated({ locationSharingEnabled: newValue });
     } catch (e) {
       console.error('Location toggle error:', e);
       // Revert local state if Firestore write failed
@@ -94,10 +123,13 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
     }
   };
 
-  // ── Firestore save (city / country + full settings) ──────────────────────────
+  // ── Firestore save (city / country + accurate GPS coords) ──────────────────
   const handleSave = async () => {
     setSaving(true);
     try {
+      const effectiveLat = pendingLat ?? getUserLat(user);
+      const effectiveLng = pendingLng ?? getUserLng(user);
+
       const patch: Record<string, unknown> = {
         locationSharingEnabled: sharing,
         basedCity: city.trim(),
@@ -105,22 +137,20 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
         locationUpdatedAt: serverTimestamp(),
       };
 
-      if (sharing && user.approximateLat != null && user.approximateLng != null) {
-        patch.approximateLat = user.approximateLat;
-        patch.approximateLng = user.approximateLng;
-      } else if (!sharing) {
-        // When opt-out, clear map coordinates from Firestore
-        patch.approximateLat = null;
-        patch.approximateLng = null;
+      if (effectiveLat !== null && effectiveLng !== null) {
+        // Store accurate GPS coords under the new field names
+        patch.locationLat = effectiveLat;
+        patch.locationLng = effectiveLng;
       }
 
       await updateDoc(doc(db, 'users', user.id), patch);
+
       onUserUpdated({
         locationSharingEnabled: sharing,
         basedCity: city.trim(),
         basedCountry: country.trim(),
-        approximateLat: sharing ? user.approximateLat : null,
-        approximateLng: sharing ? user.approximateLng : null,
+        locationLat: effectiveLat,
+        locationLng: effectiveLng,
       });
 
       setSaved(true);
@@ -146,7 +176,7 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
         <div className="flex items-center gap-2">
           <span className="text-base">📍</span>
           <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Find nearby partners
+            My Location &amp; Map Sharing
           </span>
           {user.locationSharingEnabled && (
             <span
@@ -170,10 +200,32 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
 
       {expanded && (
         <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: 'var(--border-color)' }}>
-          {/* Privacy notice */}
-          <p className="text-xs mt-3" style={{ color: 'var(--text-secondary)' }}>
-            Share approximate location to see nearby language partners. Your exact location is never shown. Only users who opt in appear on the map.
-          </p>
+
+          {/* Privacy notice — prominent */}
+          <div
+            className="mt-3 rounded-xl px-3 py-2.5 text-xs space-y-1"
+            style={{ background: 'rgba(37,99,235,0.07)', border: '1px solid rgba(37,99,235,0.18)' }}
+          >
+            <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+              🔒 Privacy &amp; Location
+            </p>
+            <p style={{ color: 'var(--text-secondary)' }}>
+              • Your location is <strong>only shared</strong> when the sharing switch below is enabled.
+            </p>
+            <p style={{ color: 'var(--text-secondary)' }}>
+              • You can <strong>turn off location sharing anytime</strong>.
+            </p>
+            <p style={{ color: 'var(--text-secondary)' }}>
+              • Your location is used <strong>only</strong> for Find Partners nearby discovery.
+            </p>
+          </div>
+
+          {/* Current location status */}
+          {hasStoredLocation && geoStatus !== 'ok' && (
+            <p className="text-xs" style={{ color: '#10b981' }}>
+              ✓ Location saved{user.locationSharingEnabled ? ' — sharing ON' : ' — sharing OFF'}.
+            </p>
+          )}
 
           {/* Geolocation button */}
           <button
@@ -191,7 +243,7 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                 </svg>
-                Detecting…
+                Detecting location…
               </>
             ) : (
               <>
@@ -201,24 +253,26 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                Use my approximate location
+                Use my current location
               </>
             )}
           </button>
 
+          {/* Status messages */}
           {geoStatus === 'ok' && (
             <p className="text-xs" style={{ color: '#10b981' }}>
-              ✓ Approximate location detected. Save below to enable map sharing.
+              ✓ Location detected. Save below to update map sharing.
             </p>
           )}
           {geoStatus === 'denied' && (
             <p className="text-xs text-red-500">
-              Location permission was denied. You can enable it in browser settings or enter your city manually.
+              Location permission was denied. Enable it in your browser settings, or enter your city manually.
             </p>
           )}
           {geoStatus === 'insecure' && (
             <p className="text-xs text-red-500">
-              Location access requires HTTPS or localhost. If you are testing from a phone, deploy the app or use a secure tunnel.
+              Location access requires HTTPS or localhost. If testing on a phone, deploy the app or use a secure
+              tunnel (e.g. ngrok).
             </p>
           )}
           {geoStatus === 'unsupported' && (
@@ -228,12 +282,12 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
           )}
           {geoStatus === 'unavailable' && (
             <p className="text-xs text-red-500">
-              We could not detect your location. Please try again or enter your city manually.
+              Could not detect your location. Please try again or enter your city manually.
             </p>
           )}
           {geoStatus === 'timeout' && (
             <p className="text-xs text-red-500">
-              Location detection took too long. Please try again or enter your city manually.
+              Location detection timed out. Please try again or enter your city manually.
             </p>
           )}
 
@@ -243,7 +297,7 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
               role="switch"
               aria-checked={sharing}
               onClick={handleToggleSharing}
-              className={`relative w-10 h-5 rounded-full transition-colors ${sharing ? '' : ''}`}
+              className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0"
               style={{
                 background: sharing ? 'var(--accent-primary)' : 'var(--border-color)',
               }}
@@ -253,9 +307,16 @@ const LocationSettings: React.FC<LocationSettingsProps> = ({ user, onUserUpdated
                 style={{ transform: sharing ? 'translateX(20px)' : 'translateX(0)' }}
               />
             </button>
-            <span className="text-sm" style={{ color: 'var(--text-primary)' }}>
-              Show my approximate location to partners
-            </span>
+            <div>
+              <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                Share my location on map
+              </span>
+              <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                {sharing
+                  ? 'Other users can see you on the community map.'
+                  : 'Your marker is hidden from the map.'}
+              </p>
+            </div>
           </label>
 
           {/* Manual city/country */}

@@ -36,13 +36,17 @@ export interface UserProfile {
   longestStreak?: number;
   lastActiveDate?: string;
 
-  // Location sharing (opt-in only, approximate city-level data)
+  // Location sharing (opt-in, accurate GPS — only shared when locationSharingEnabled is true)
   locationSharingEnabled?: boolean;
+  // Accurate GPS fields (preferred for map feature)
+  locationLat?: number | null;
+  locationLng?: number | null;
+  locationUpdatedAt?: any; // Firestore Timestamp
+  // Legacy approximate fields — kept for backward compat, not written for new users
   approximateLat?: number | null;
   approximateLng?: number | null;
   basedCity?: string;
   basedCountry?: string;
-  locationUpdatedAt?: any; // Firestore Timestamp
 }
 
 // Gamification Types
