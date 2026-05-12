@@ -18,9 +18,12 @@ const Landing: React.FC<LandingProps> = ({ onNavigateToAuth }) => {
 
       {/* ── NAV ── */}
       <nav className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto w-full">
-        <div className="flex items-center space-x-2">
-          <img src="/ndhu_logo.png" alt="LINGO" className="w-8 h-8 object-contain" />
-          <span className="font-extrabold text-xl tracking-tight text-[var(--text-primary)]">LINGO</span>
+        <div className="flex items-center">
+          <img
+            src="/lingo-logo.png"
+            alt="LingoSwap"
+            style={{ height: '36px', width: 'auto', objectFit: 'contain' }}
+          />
         </div>
         <div className="flex items-center space-x-3">
           <button
@@ -41,6 +44,15 @@ const Landing: React.FC<LandingProps> = ({ onNavigateToAuth }) => {
       {/* ── HERO ── */}
       <section className="hero-gradient flex-1 flex flex-col items-center justify-center px-6 py-16 text-center">
         <div className="max-w-5xl mx-auto w-full">
+
+          {/* Hero logo */}
+          <div className="flex justify-center mb-6">
+            <img
+              src="/lingo-logo.png"
+              alt="LingoSwap"
+              style={{ height: '72px', width: 'auto', objectFit: 'contain', maxWidth: '320px' }}
+            />
+          </div>
 
           {/* Pill badge */}
           <div className="inline-flex items-center space-x-2 bg-[var(--accent-primary-muted)] border border-[var(--accent-primary)]/30 text-[var(--accent-primary)] text-xs font-semibold px-3 py-1 rounded-full mb-6">

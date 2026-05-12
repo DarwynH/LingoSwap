@@ -103,10 +103,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
     <>
       <nav className="hidden md:flex bg-surface-card border-r border-theme-border flex-col h-full w-64 flex-shrink-0 z-30" style={{borderRightColor:'var(--border-color)'}}>
         <div className="p-4 h-[72px] flex items-center flex-shrink-0">
-          <div className="w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0">
-            <img src="/ndhu_logo.png" alt="LingoSwap Logo" className="w-full h-full object-contain" />
-          </div>
-          <span className="font-extrabold text-lg tracking-tight text-theme-text ml-3 whitespace-nowrap">LINGO</span>
+          <img
+            src="/lingo-logo.png"
+            alt="LingoSwap"
+            style={{ height: '40px', width: 'auto', objectFit: 'contain', maxWidth: '160px' }}
+          />
         </div>
 
         <div className="flex-1 px-3 space-y-2 py-4 overflow-y-auto overflow-x-hidden">

@@ -79,9 +79,12 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onBack, initialIsLogin = true }) =
       >
         {/* Logo + back */}
         <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center space-x-2">
-            <img src="/ndhu_logo.png" alt="LingoSwap" className="w-7 h-7 object-contain" />
-            <span className="font-extrabold text-lg" style={{ color: 'var(--text-primary)' }}>LingoSwap</span>
+          <div className="flex items-center">
+            <img
+              src="/lingo-logo.png"
+              alt="LingoSwap"
+              style={{ height: '32px', width: 'auto', objectFit: 'contain' }}
+            />
           </div>
           {onBack && (
             <button
@@ -99,7 +102,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onBack, initialIsLogin = true }) =
         {/* Heading */}
         <div className="mb-6">
           <h2 className="text-2xl font-extrabold" style={{ color: 'var(--text-primary)' }}>
-            {isLogin ? 'Welcome back' : 'Create your LingoSwap account'}
+            {isLogin ? 'Welcome back' : 'Create your account'}
           </h2>
           <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
             {isLogin
