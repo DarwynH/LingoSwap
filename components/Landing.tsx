@@ -19,8 +19,8 @@ const Landing: React.FC<LandingProps> = ({ onNavigateToAuth }) => {
       {/* ── NAV ── */}
       <nav className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto w-full">
         <div className="flex items-center space-x-2">
-          <img src="/ndhu_logo.png" alt="LingoSwap" className="w-8 h-8 object-contain" />
-          <span className="font-extrabold text-xl tracking-tight text-[var(--text-primary)]">LingoSwap</span>
+          <img src="/ndhu_logo.png" alt="LINGO" className="w-8 h-8 object-contain" />
+          <span className="font-extrabold text-xl tracking-tight text-[var(--text-primary)]">LINGO</span>
         </div>
         <div className="flex items-center space-x-3">
           <button
@@ -218,7 +218,7 @@ const Landing: React.FC<LandingProps> = ({ onNavigateToAuth }) => {
               Built as an academic language learning project at National Dong Hwa University.
             </span>
           </div>
-          <p className="text-[10px] text-[var(--text-secondary)] opacity-50">© 2026 LingoSwap.</p>
+          <p className="text-[10px] text-[var(--text-secondary)] opacity-50">© 2026 LINGO.</p>
         </div>
       </footer>
 

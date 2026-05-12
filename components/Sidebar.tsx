@@ -106,7 +106,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange, unreadCount =
           <div className="w-9 h-9 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0">
             <img src="/ndhu_logo.png" alt="LingoSwap Logo" className="w-full h-full object-contain" />
           </div>
-          <span className="font-extrabold text-lg tracking-tight text-theme-text ml-3 whitespace-nowrap">LingoSwap</span>
+          <span className="font-extrabold text-lg tracking-tight text-theme-text ml-3 whitespace-nowrap">LINGO</span>
         </div>
 
         <div className="flex-1 px-3 space-y-2 py-4 overflow-y-auto overflow-x-hidden">
