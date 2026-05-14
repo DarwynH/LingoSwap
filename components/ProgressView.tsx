@@ -9,9 +9,12 @@ import {
   getOrResetDailyQuests,
   claimQuestReward,
   LEVELS,
+  isProfileComplete,
+  checkAndAwardCompleteProfileQuest,
 } from '../services/gamificationService';
 import LevelBadge from './ui/LevelBadge';
 import Avatar from './ui/Avatar';
+import { auth } from '../firebase';
 
 interface ProgressViewProps {
   user: UserProfile;
@@ -23,6 +26,11 @@ const ProgressView: React.FC<ProgressViewProps> = ({ user }) => {
   const [leaderboard, setLeaderboard] = useState<UserProfile[]>([]);
   const [guideOpen, setGuideOpen] = useState(false);
   const [claiming, setClaiming] = useState<string | null>(null);
+  // One-time quest state (read from Firestore via onSnapshot)
+  const [profileQuestClaimed, setProfileQuestClaimed] = useState(
+    user.completedOneTimeQuests?.completeProfile?.claimed === true
+  );
+  const [profileIsComplete] = useState(() => isProfileComplete(user));
 
   const level = getLevelInfo(xp);
   const xpRewardInfo = getXPRewardInfo();
@@ -36,6 +44,10 @@ const ProgressView: React.FC<ProgressViewProps> = ({ user }) => {
         if (data.questData) {
           setQuestData(data.questData as QuestData);
         }
+        // Sync one-time quest state from Firestore
+        setProfileQuestClaimed(
+          data.completedOneTimeQuests?.completeProfile?.claimed === true
+        );
       }
     });
     return () => unsub();
@@ -62,6 +74,16 @@ const ProgressView: React.FC<ProgressViewProps> = ({ user }) => {
     setClaiming(questId);
     await claimQuestReward(user.id, questId);
     // UI updates via the onSnapshot listener
+    setTimeout(() => setClaiming(null), 600);
+  };
+
+  /** Handle the Complete Profile one-time quest claim */
+  const handleClaimProfileQuest = async () => {
+    if (profileQuestClaimed || claiming === 'completeProfile') return;
+    const uid = auth.currentUser?.uid || user.id;
+    setClaiming('completeProfile');
+    await checkAndAwardCompleteProfileQuest(uid, user);
+    // onSnapshot listener will update profileQuestClaimed
     setTimeout(() => setClaiming(null), 600);
   };
 
@@ -213,6 +235,86 @@ const ProgressView: React.FC<ProgressViewProps> = ({ user }) => {
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* ─── One-Time Quest: Complete Profile ───────────────────── */}
+        <div className="bg-surface-card rounded-2xl border border-theme-border shadow-sm overflow-hidden">
+          <div className="p-4 md:p-5 border-b border-theme-border flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-theme-text flex items-center gap-2">
+                <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                One-Time Quests
+              </h3>
+              <p className="text-xs text-theme-muted mt-0.5">Earned forever — cannot be repeated</p>
+            </div>
+            <span className="bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider border border-purple-500/20">
+              Lifetime
+            </span>
+          </div>
+
+          <div className="p-4 md:px-5 flex items-center gap-4 transition-colors hover:bg-surface-hover/50">
+            {/* Status icon */}
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all ${
+              profileQuestClaimed
+                ? 'bg-emerald-500/15 text-emerald-500'
+                : profileIsComplete
+                  ? 'bg-purple-500/15 text-purple-500 animate-pulse'
+                  : 'bg-surface-hover text-theme-muted'
+            }`}>
+              {profileQuestClaimed ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              )}
+            </div>
+
+            {/* Quest info */}
+            <div className="flex-1 min-w-0">
+              <p className={`font-semibold text-sm ${profileQuestClaimed ? 'text-theme-muted line-through' : 'text-theme-text'}`}>
+                Complete Your Profile
+              </p>
+              <p className="text-xs text-theme-muted">Set your name, native language, and target language</p>
+              {!profileQuestClaimed && (
+                <div className="mt-1.5 w-full bg-surface-hover rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${profileIsComplete ? 'bg-purple-500' : 'bg-theme-muted'}`}
+                    style={{ width: profileIsComplete ? '100%' : '33%' }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Reward / Claim button */}
+            <div className="flex-shrink-0">
+              {profileQuestClaimed ? (
+                <span className="text-xs font-bold text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+                  +20 XP ✓
+                </span>
+              ) : profileIsComplete ? (
+                <button
+                  onClick={handleClaimProfileQuest}
+                  disabled={claiming === 'completeProfile'}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all active:scale-95 ${
+                    claiming === 'completeProfile'
+                      ? 'bg-emerald-500 text-white scale-95'
+                      : 'bg-purple-600 hover:bg-purple-700 text-white shadow-sm'
+                  }`}
+                >
+                  {claiming === 'completeProfile' ? '✓ Claimed!' : 'Claim +20 XP'}
+                </button>
+              ) : (
+                <span className="text-xs font-semibold text-theme-muted bg-surface-hover px-2.5 py-1 rounded-lg">
+                  +20 XP
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

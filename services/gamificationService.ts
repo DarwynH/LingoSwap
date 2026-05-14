@@ -2,9 +2,17 @@
 // Pure, deterministic gamification logic — no AI, no randomness
 
 import { db } from '../firebase';
-import { doc, getDoc, updateDoc, increment, setDoc } from 'firebase/firestore';
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  increment,
+  setDoc,
+  runTransaction,
+  serverTimestamp,
+} from 'firebase/firestore';
 import { XPActionType, QuestItem, QuestData, LevelInfo } from '../types';
-import { recordUserActivity } from './progressService';
+import { recordUserActivity, getLocalDateString } from './progressService';
 
 // ─── XP Reward Table ───────────────────────────────────────────────
 export const XP_REWARDS: Record<XPActionType, number> = {
@@ -82,7 +90,7 @@ export async function addXP(userId: string, action: XPActionType): Promise<void>
       const userSnap = await getDoc(userRef);
       if (userSnap.exists()) {
         const data = userSnap.data();
-        const today = new Date().toDateString();
+        const today = getLocalDateString();
         const dailyMsgXP = data._dailyMsgXPDate === today ? (data._dailyMsgXP || 0) : 0;
 
         if (dailyMsgXP >= MESSAGE_XP_DAILY_CAP) return; // cap reached
@@ -138,7 +146,7 @@ export async function recordActions(userId: string, actions: ActionRecord[]): Pr
     }
 
     const data = userSnap.data();
-    const today = new Date().toDateString();
+    const today = getLocalDateString();
 
     // ── Compute total XP to add ──
     let totalXP = 0;
@@ -241,8 +249,8 @@ function createDailyQuests(): QuestItem[] {
     },
     {
       id: 'start_conversation',
-      title: 'Conversation Starter',
-      description: 'Start or continue a conversation',
+      title: 'Language Exchange',
+      description: 'Send a message in a chat conversation',
       target: 1,
       progress: 0,
       reward: 10,
@@ -260,10 +268,15 @@ function createDailyQuests(): QuestItem[] {
   ];
 }
 
-/** Read quests from Firestore, reset if it's a new day */
+/**
+ * Read quests from Firestore, reset if it's a new day.
+ * Uses YYYY-MM-DD date keys for stability.
+ * Claimed state is preserved per date — changing language does NOT reset today's quests.
+ */
 export async function getOrResetDailyQuests(userId: string): Promise<QuestData> {
   const userRef = doc(db, 'users', userId);
-  const today = new Date().toDateString();
+  // Use YYYY-MM-DD format — locale-independent and sortable
+  const today = getLocalDateString();
 
   try {
     const userSnap = await getDoc(userRef);
@@ -271,6 +284,7 @@ export async function getOrResetDailyQuests(userId: string): Promise<QuestData> 
       const data = userSnap.data();
       const questData = data.questData as QuestData | undefined;
 
+      // Only return existing data if it matches today's key
       if (questData && questData.date === today) {
         return questData;
       }
@@ -281,7 +295,8 @@ export async function getOrResetDailyQuests(userId: string): Promise<QuestData> 
       date: today,
       quests: createDailyQuests(),
     };
-    await updateDoc(userRef, { questData: freshData });
+    // Use setDoc with merge to avoid overwriting XP or other fields
+    await setDoc(userRef, { questData: freshData }, { merge: true });
     return freshData;
 
   } catch (e) {
@@ -299,7 +314,7 @@ export async function updateQuestProgress(userId: string, questId: string, amoun
 
     const data = userSnap.data();
     const questData = data.questData as QuestData | undefined;
-    const today = new Date().toDateString();
+    const today = getLocalDateString();
 
     if (!questData || questData.date !== today) return; // stale, will reset on next read
 
@@ -318,38 +333,112 @@ export async function updateQuestProgress(userId: string, questId: string, amoun
   }
 }
 
-/** Claim a completed quest reward — awards bonus XP */
+/**
+ * Claim a completed daily quest reward — awards bonus XP.
+ * Uses a Firestore transaction to prevent double-claiming.
+ */
 export async function claimQuestReward(userId: string, questId: string): Promise<boolean> {
   try {
     const userRef = doc(db, 'users', userId);
-    const userSnap = await getDoc(userRef);
-    if (!userSnap.exists()) return false;
+    const today = getLocalDateString();
 
-    const data = userSnap.data();
-    const questData = data.questData as QuestData | undefined;
-    if (!questData) return false;
+    return await runTransaction(db, async (transaction) => {
+      const userSnap = await transaction.get(userRef);
+      if (!userSnap.exists()) return false;
 
-    const quest = questData.quests.find(q => q.id === questId);
-    if (!quest || quest.claimed || quest.progress < quest.target) return false;
+      const data = userSnap.data();
+      const questData = data.questData as QuestData | undefined;
+      if (!questData || questData.date !== today) return false;
 
-    const updatedQuests = questData.quests.map(q =>
-      q.id === questId ? { ...q, claimed: true } : q
-    );
+      const quest = questData.quests.find(q => q.id === questId);
+      // Guard: must exist, not yet claimed, and be complete
+      if (!quest || quest.claimed || quest.progress < quest.target) return false;
 
-    await updateDoc(userRef, {
-      xp: increment(quest.reward),
-      questData: {
-        ...questData,
-        quests: updatedQuests,
-        lastClaimedAt: Date.now(),
-      },
+      const currentXP = typeof data.xp === 'number' ? data.xp : 0;
+      const updatedQuests = questData.quests.map(q =>
+        q.id === questId ? { ...q, claimed: true } : q
+      );
+
+      transaction.set(userRef, {
+        xp: currentXP + quest.reward,
+        questData: {
+          ...questData,
+          quests: updatedQuests,
+          lastClaimedAt: Date.now(),
+        },
+      }, { merge: true });
+
+      return true;
     });
-
-    await recordUserActivity(userId, 'questClaimed');
-
-    return true;
   } catch (e) {
     console.warn('claimQuestReward failed:', e);
     return false;
+  }
+}
+
+// ─── One-Time Quest: Complete Profile ─────────────────────────────
+
+const COMPLETE_PROFILE_REWARD = 20; // XP reward
+
+/**
+ * Determines if a user's profile is considered complete.
+ * Required: name, nativeLanguage (non-empty, non-SELECT), targetLanguage (non-empty, non-SELECT).
+ */
+export function isProfileComplete(profile: {
+  name?: string;
+  nativeLanguage?: any;
+  targetLanguage?: any;
+}): boolean {
+  const hasName = Boolean(profile.name && profile.name.trim().length > 0);
+
+  const nativeLangs = Array.isArray(profile.nativeLanguage) ? profile.nativeLanguage : [profile.nativeLanguage];
+  const hasNative = nativeLangs.some(l => l && l !== 'Choose Language');
+
+  const targetLangs = Array.isArray(profile.targetLanguage) ? profile.targetLanguage : [profile.targetLanguage];
+  const hasTarget = targetLangs.some(l => l && l !== 'Choose Language');
+
+  return hasName && hasNative && hasTarget;
+}
+
+/**
+ * Check if the profile is complete and, if so, award the one-time Complete Profile XP.
+ * Uses a transaction to ensure XP is only awarded once, even across multiple calls.
+ * Safe to call whenever the profile is updated.
+ */
+export async function checkAndAwardCompleteProfileQuest(
+  userId: string,
+  profile: { name?: string; nativeLanguage?: any; targetLanguage?: any }
+): Promise<void> {
+  if (!isProfileComplete(profile)) return;
+
+  try {
+    const userRef = doc(db, 'users', userId);
+
+    await runTransaction(db, async (transaction) => {
+      const userSnap = await transaction.get(userRef);
+      if (!userSnap.exists()) return;
+
+      const data = userSnap.data();
+
+      // Check if already claimed — never award twice
+      const alreadyClaimed =
+        data.completedOneTimeQuests?.completeProfile?.claimed === true;
+      if (alreadyClaimed) return;
+
+      const currentXP = typeof data.xp === 'number' ? data.xp : 0;
+
+      transaction.set(userRef, {
+        xp: currentXP + COMPLETE_PROFILE_REWARD,
+        completedOneTimeQuests: {
+          completeProfile: {
+            completed: true,
+            claimed: true,
+            claimedAt: serverTimestamp(),
+          },
+        },
+      }, { merge: true });
+    });
+  } catch (e) {
+    console.warn('checkAndAwardCompleteProfileQuest failed:', e);
   }
 }

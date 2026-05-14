@@ -29,6 +29,14 @@ export interface UserProfile {
   favoriteMessages?: string[];
   xp?: number;
   questData?: QuestData;
+  /** One-time quests that are completed forever (not per-day) */
+  completedOneTimeQuests?: {
+    completeProfile?: {
+      completed: boolean;
+      claimed: boolean;
+      claimedAt?: any; // Firestore Timestamp
+    };
+  };
   chatSessionCount?: number;
   chatSessions?: number;
   messagedChatIds?: string[];

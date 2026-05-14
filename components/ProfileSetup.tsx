@@ -11,9 +11,10 @@ import LevelBadge from './ui/LevelBadge';
 interface ProfileSetupProps {
   profile: UserProfile;
   onSave: (updated: UserProfile) => void;
+  onCancel?: () => void;
 }
 
-const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
+const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave, onCancel }) => {
   const [name, setName] = useState(profile.name);
   const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
   const [bio, setBio] = useState(profile.bio || "");
@@ -258,13 +259,24 @@ const ProfileSetup: React.FC<ProfileSetupProps> = ({ profile, onSave }) => {
           />
         </div>
 
-        <button
-          type="button"
-          onClick={handleSave}
-          className="w-full bg-[#00a884] text-white font-bold p-4 rounded-xl shadow-lg hover:bg-[#008f70] transition-all"
-        >
-          Save & Discover Partners
-        </button>
+        <div className="flex gap-4">
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="w-full bg-surface-card border border-theme-border text-theme-text font-bold p-4 rounded-xl shadow hover:bg-theme-border/50 transition-all"
+            >
+              Cancel
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            className="w-full bg-[#00a884] text-white font-bold p-4 rounded-xl shadow-lg hover:bg-[#008f70] transition-all"
+          >
+            Save Profile
+          </button>
+        </div>
 
         <div className="pt-8 mt-4 border-t border-theme-border">
           <h3 className="text-xl font-bold mb-4 text-theme-text">Preferences</h3>

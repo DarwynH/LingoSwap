@@ -18,6 +18,7 @@ import { useMediaQuery } from './hooks/useMediaQuery';
 import { playMessageNotification } from './utils/notificationSound';
 import { flushSessionTime, markSessionStarted } from './services/progressService';
 import { isRecentlyOnline } from './utils/presenceUtils';
+import { checkAndAwardCompleteProfileQuest } from './services/gamificationService';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -84,6 +85,7 @@ const App: React.FC = () => {
         const userDoc = await getDoc(userRef);
 
         if (userDoc.exists()) {
+          // ✅ SAFE: Only update online presence — never overwrite XP or quest fields
           await updateDoc(userRef, { isOnline: true, lastSeen: serverTimestamp() });
           setUser(userDoc.data() as UserProfile);
           setView('main');
@@ -109,16 +111,25 @@ const App: React.FC = () => {
             }
           });
         } else {
+          // ✅ NEW USER (including Google first-time sign-in):
+          // Create base profile with xp: 0 only because the document doesn't exist yet.
+          // setDoc with merge ensures that if somehow the doc appears between getDoc and here,
+          // we won't accidentally reset it.
           const newProfile: UserProfile = {
             id: firebaseUser.uid,
             name: firebaseUser.displayName || '',
             email: firebaseUser.email || '',
             avatar: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
             bio: '',
-            nativeLanguage: Language.ENGLISH,
-            targetLanguage: Language.SPANISH,
-            xp: 0
+            nativeLanguage: [Language.ENGLISH] as any,
+            targetLanguage: [Language.SPANISH] as any,
+            xp: 0,
+            isOnline: true,
+            lastSeen: serverTimestamp() as any,
           };
+          // Use setDoc with merge so we never overwrite any existing XP if the doc was
+          // created between the getDoc call and now (race-condition safety).
+          await setDoc(userRef, newProfile, { merge: true });
           setUser(newProfile);
           setView('setup');
         }
@@ -311,10 +322,41 @@ const App: React.FC = () => {
     if (!auth.currentUser) return;
     try {
       const userRef = doc(db, "users", auth.currentUser.uid);
-      await setDoc(userRef, updatedProfile, { merge: true });
+
+      // ✅ SAFE PROFILE UPDATE: Only write profile display fields.
+      // NEVER include xp, questData, completedOneTimeQuests, or other progress fields here.
+      // Using updateDoc (not setDoc) to prevent accidentally overwriting any Firestore
+      // fields that aren't part of the profile form (e.g. XP incremented by gamification).
+      const profileFields: Record<string, any> = {
+        name: updatedProfile.name,
+        avatar: updatedProfile.avatar,
+        bio: updatedProfile.bio ?? '',
+        nativeLanguage: updatedProfile.nativeLanguage,
+        targetLanguage: updatedProfile.targetLanguage,
+        isOnline: true,
+        lastSeen: serverTimestamp(),
+        // Preserve any location fields passed through the profile object
+        ...(updatedProfile.basedCity !== undefined && { basedCity: updatedProfile.basedCity }),
+        ...(updatedProfile.basedCountry !== undefined && { basedCountry: updatedProfile.basedCountry }),
+      };
+
+      // Try updateDoc first (safest for existing users — no risk of resetting missing fields)
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        await updateDoc(userRef, profileFields);
+      } else {
+        // Brand new doc (shouldn't normally happen here, but handle gracefully)
+        await setDoc(userRef, { ...profileFields, xp: 0 }, { merge: true });
+      }
+
       setUser(updatedProfile);
       setActiveTab('partners');
       setView('main');
+
+      // ✅ Check and award Complete Profile one-time quest (safe — uses transaction, awards once)
+      checkAndAwardCompleteProfileQuest(auth.currentUser.uid, updatedProfile).catch(e =>
+        console.warn('Complete profile quest check failed:', e)
+      );
     } catch (error) {
       console.error("Firestore Save Error:", error);
     }
@@ -566,8 +608,8 @@ const App: React.FC = () => {
         avatar: incomingCall.callerAvatar,
         email: '',
         bio: '',
-        nativeLanguage: Language.ENGLISH,
-        targetLanguage: Language.SPANISH
+        nativeLanguage: [Language.ENGLISH] as any,
+        targetLanguage: [Language.SPANISH] as any
       };
       
       const type = incomingCall.type || 'voice'; 
@@ -588,8 +630,8 @@ const App: React.FC = () => {
         avatar: incomingCall.callerAvatar,
         email: '',
         bio: '',
-        nativeLanguage: Language.ENGLISH,
-        targetLanguage: Language.SPANISH
+        nativeLanguage: [Language.ENGLISH] as any,
+        targetLanguage: [Language.SPANISH] as any
       };
       await logCallMessageInChat(partner, 'rejected', incomingCall.type, incomingCall.callerId);
       setIncomingCall(null);
@@ -665,7 +707,7 @@ const App: React.FC = () => {
 
       {view === 'landing' && <Landing onNavigateToAuth={(isLogin) => { setAuthMode(isLogin); setView('auth'); }} />}
       {view === 'auth' && <Auth key={authMode ? 'login' : 'signup'} initialIsLogin={authMode} onLogin={handleLogin} onBack={() => setView('landing')} />}
-      {view === 'setup' && user && <ProfileSetup profile={user} onSave={handleProfileSave} />}
+      {view === 'setup' && user && <ProfileSetup profile={user} onSave={handleProfileSave} onCancel={() => setView('main')} />}
       
       {view === 'main' && user && (
         <div className="flex flex-1 overflow-hidden h-full w-full bg-surface-main">
@@ -723,7 +765,7 @@ const App: React.FC = () => {
                     <div className="w-24 h-24 mb-6 mx-auto rounded-full bg-surface-card flex items-center justify-center shadow-inner border border-theme-border/50">
                       <img src="/lingo-logo.png" alt="LingoSwap" className="w-14 h-14 object-contain" />
                     </div>
-                    <h2 className="text-2xl font-light text-theme-text mb-3 tracking-wide">LingoSwap <span className="font-semibold text-theme-text">Web</span></h2>
+                    <h2 className="text-2xl font-light text-theme-text mb-3 tracking-wide">LingoChat <span className="font-semibold text-theme-text">Web</span></h2>
                     <p className="text-theme-muted leading-relaxed text-sm">
                       Select a conversation from the chat list, or discover new partners to start a language exchange.
                     </p>
