@@ -6,6 +6,7 @@ import {
   runTransaction,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from 'firebase/firestore';
 
 export type ActivityType =
@@ -76,7 +77,6 @@ export async function updateDailyStreak(userId: string): Promise<void> {
     const data = userSnap.exists() ? userSnap.data() : {};
     const previousStreak = getStreakFromUserData(data);
     const lastActiveDate = data.lastActiveDate ?? data.lastStudyDate;
-    const activityByDate = data.activityByDate ?? data.weeklyActivity ?? {};
 
     const updates: Record<string, any> = {
       updatedAt: serverTimestamp(),
@@ -92,12 +92,6 @@ export async function updateDailyStreak(userId: string): Promise<void> {
       updates.longestStreak = longestStreak;
       updates.lastActiveDate = today;
     }
-
-    const todayCount = Number(activityByDate[today] || 0) + 1;
-    updates.activityByDate = {
-      ...activityByDate,
-      [today]: todayCount,
-    };
 
     transaction.set(userRef, updates, { merge: true });
   });
@@ -128,8 +122,6 @@ export async function recordUserActivityAfterMessage(userId: string, chatId: str
       const previousStreak = getStreakFromUserData(data);
       const lastActiveDate = data.lastActiveDate ?? data.lastStudyDate;
 
-      const activityByDate = data.activityByDate ?? data.weeklyActivity ?? {};
-
       const updates: Record<string, any> = {
         updatedAt: serverTimestamp(),
         lastChatActivityAt: serverTimestamp(),
@@ -153,13 +145,6 @@ export async function recordUserActivityAfterMessage(userId: string, chatId: str
         updates.longestStreak = longestStreak;
         updates.lastActiveDate = today;
       }
-
-      // 3. Weekly Activity
-      const todayCount = Number(activityByDate[today] || 0) + 1;
-      updates.activityByDate = {
-        ...activityByDate,
-        [today]: todayCount,
-      };
 
       transaction.set(userRef, updates, { merge: true });
     });
@@ -200,4 +185,105 @@ export async function getUserProgress(userId: string): Promise<{
     currentStreak: getStreakFromUserData(data),
     totalSessionSeconds: getSessionSecondsFromUserData(data),
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Active-Minutes Session Tracking
+//
+// Heartbeat runs every 60 seconds while the user is logged in AND the tab is
+// visible.  Each tick increments activityMinutesByDate[YYYY-MM-DD] by 1 in
+// Firestore using a dot-path-safe merge approach.
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+let _visibilityHandler: (() => void) | null = null;
+let _trackingUserId: string | null = null;
+
+/**
+ * Write +1 minute to activityMinutesByDate[today] for the given user.
+ * Uses a Firestore updateDoc with a dynamic dot-path key so we never
+ * accidentally overwrite the whole map.
+ */
+async function _tickActiveMinute(userId: string): Promise<void> {
+  const today = getLocalDateString();
+  const userRef = doc(db, 'users', userId);
+
+  try {
+    // Use dot-notation path so Firestore merges into the map field atomically.
+    // e.g. { "activityMinutesByDate.2026-05-14": increment(1) }
+    await updateDoc(userRef, {
+      [`activityMinutesByDate.${today}`]: increment(1),
+      lastActivityHeartbeatAt: serverTimestamp(),
+      lastActivityDate: today,
+    });
+  } catch (err: any) {
+    // If the document doesn't have activityMinutesByDate yet, updateDoc will
+    // succeed anyway because Firestore supports creating nested map entries
+    // via dot-path even if the parent map field didn't exist before.
+    // But just in case, fall back to setDoc with merge.
+    console.warn('[ActivityTracking] updateDoc failed, falling back to setDoc merge:', err?.code);
+    try {
+      await setDoc(userRef, {
+        activityMinutesByDate: { [today]: increment(1) },
+        lastActivityHeartbeatAt: serverTimestamp(),
+        lastActivityDate: today,
+      }, { merge: true });
+    } catch (e2) {
+      console.warn('[ActivityTracking] setDoc merge also failed:', e2);
+    }
+  }
+}
+
+/**
+ * Start the 60-second active-minutes heartbeat for a user.
+ * Safe to call multiple times — duplicate calls are ignored if the same userId
+ * is already being tracked.
+ */
+export function startActiveSessionTracking(userId: string): void {
+  if (!userId) return;
+
+  // Don't create a duplicate interval if already tracking this user.
+  if (_trackingUserId === userId && _heartbeatInterval !== null) return;
+
+  // If switching users, stop the previous tracker first.
+  stopActiveSessionTracking();
+
+  _trackingUserId = userId;
+
+  const INTERVAL_MS = 60_000; // 1 minute
+
+  // Tick immediately on start (counts the first minute of the session).
+  if (document.visibilityState === 'visible') {
+    _tickActiveMinute(userId).catch(() => {});
+  }
+
+  // Then tick every 60 seconds while the tab is visible.
+  _heartbeatInterval = setInterval(() => {
+    if (document.visibilityState === 'visible' && _trackingUserId === userId) {
+      _tickActiveMinute(userId).catch(() => {});
+    }
+  }, INTERVAL_MS);
+
+  // Pause / resume based on tab visibility — don't count hidden time.
+  _visibilityHandler = () => {
+    // Nothing extra needed; the interval already checks visibilityState.
+    // This handler is kept for future use (e.g. resuming from idle).
+  };
+  document.addEventListener('visibilitychange', _visibilityHandler);
+}
+
+/**
+ * Stop the active-minutes heartbeat.
+ * Called on logout or app unmount.
+ */
+export function stopActiveSessionTracking(): void {
+  if (_heartbeatInterval !== null) {
+    clearInterval(_heartbeatInterval);
+    _heartbeatInterval = null;
+  }
+  if (_visibilityHandler !== null) {
+    document.removeEventListener('visibilitychange', _visibilityHandler);
+    _visibilityHandler = null;
+  }
+  _trackingUserId = null;
 }

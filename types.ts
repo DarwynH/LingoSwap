@@ -41,6 +41,10 @@ export interface UserProfile {
   chatSessions?: number;
   messagedChatIds?: string[];
   activityByDate?: Record<string, number>;
+  /** Canonical active-minutes map: { "YYYY-MM-DD": minuteCount } */
+  activityMinutesByDate?: Record<string, number>;
+  lastActivityHeartbeatAt?: any; // Firestore Timestamp
+  lastActivityDate?: string;
   longestStreak?: number;
   lastActiveDate?: string;
 

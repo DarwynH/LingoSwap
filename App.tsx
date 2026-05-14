@@ -16,7 +16,7 @@ import SavedItemsView from './components/SavedItemsView';
 import ProgressView from './components/ProgressView';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { playMessageNotification } from './utils/notificationSound';
-import { flushSessionTime, markSessionStarted } from './services/progressService';
+import { flushSessionTime, markSessionStarted, startActiveSessionTracking, stopActiveSessionTracking } from './services/progressService';
 import { isRecentlyOnline } from './utils/presenceUtils';
 import { checkAndAwardCompleteProfileQuest } from './services/gamificationService';
 
@@ -90,6 +90,9 @@ const App: React.FC = () => {
           setUser(userDoc.data() as UserProfile);
           setView('main');
 
+          // Start active-minutes heartbeat (increments activityMinutesByDate every 60s)
+          startActiveSessionTracking(firebaseUser.uid);
+
           heartbeatInterval = setInterval(() => {
             if (document.visibilityState === 'visible') {
               updateDoc(userRef, { isOnline: true, lastSeen: serverTimestamp() }).catch(e => console.warn(e));
@@ -137,6 +140,7 @@ const App: React.FC = () => {
         setUser(null);
         setView('landing');
         resetUserSessionState();
+        stopActiveSessionTracking();
         if (heartbeatInterval) clearInterval(heartbeatInterval);
       }
     });
@@ -578,6 +582,7 @@ const App: React.FC = () => {
     // 2. Safely attempt to update online status (don't break if it fails)
     if (user) {
       try {
+        stopActiveSessionTracking();
         await sessionFlushRef.current?.();
         await updateDoc(doc(db, "users", user.id), { isOnline: false, lastSeen: serverTimestamp() });
       } catch (error) {

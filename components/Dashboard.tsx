@@ -38,8 +38,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
         }
         setActiveSessions(Number(data.chatSessions ?? data.chatSessionCount ?? data.sessionCount ?? data.sessions ?? 0) || 0);
 
-        // Generate last 7 days data
-        const activityByDate = data.activityByDate || data.weeklyActivity || {};
+        // Generate last 7 days of active-minutes data.
+        // Canonical field: activityMinutesByDate  (fallback: activityByDate, weeklyActivity)
+        const activityMinutesByDate =
+          data.activityMinutesByDate ??
+          data.activityByDate ??
+          data.weeklyActivity ??
+          {};
         const last7Days = [];
         for (let i = 6; i >= 0; i--) {
           const d = new Date();
@@ -50,7 +55,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
           const day = String(d.getDate()).padStart(2, '0');
           const dateStr = `${year}-${month}-${day}`;
           
-          const count = Number(activityByDate[dateStr]) || 0;
+          const count = Number(activityMinutesByDate[dateStr]) || 0;
           const dayLabel = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d.getDay()];
           last7Days.push({ dayLabel, count, isToday: i === 0 });
         }
@@ -197,13 +202,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onLogout, onEditProfile, on
             {/* This now uses your real user data */}
             {(weeklyActivityData.length > 0 ? weeklyActivityData : [0,0,0,0,0,0,0].map((_, i) => ({ dayLabel: ['S','M','T','W','T','F','S'][(new Date().getDay() - 6 + i + 7) % 7], count: 0, isToday: i === 6 }))).map((data, i) => {
               const { count, isToday, dayLabel } = data;
-              // Let's cap the visual height at some value, say 10 messages = 100% height
-              const heightPercentage = Math.min(Math.max((count / 10) * 100, 4), 100);
+              // Scale bar: 60 active minutes = 100% height
+              const heightPercentage = count === 0 ? 4 : Math.min(Math.max((count / 60) * 100, 6), 100);
 
               return (
                 <div key={i} className="flex flex-col items-center flex-1 h-full justify-end group relative">
                   <div className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-800 text-white text-[10px] px-2 py-1 rounded pointer-events-none whitespace-nowrap">
-                    {count} msg{count !== 1 ? 's' : ''}
+                    {count} min{count !== 1 ? 's' : ''}
                   </div>
 
                   <div
